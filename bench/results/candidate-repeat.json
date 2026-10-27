@@ -1,0 +1,39 @@
+{
+  "meta": {
+    "label": "candidate-post-rigor-repeat",
+    "rc_binary": "/home/one/projects/one/cli-rustfs/target/release/rc",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "git_rev": "25f1660d2a989e4802829d7e4e2b84f846d3d60e",
+    "started_unix_s": 1793061119
+  },
+  "cells": [
+    {"group":"micro/path","name":"parse remote shallow","n":20,"min_ns":57.9,"median_ns":62.6,"mean_ns":67.1,"p95_ns":79.9,"max_ns":82.0,"stddev_ns":8.8},
+    {"group":"micro/path","name":"parse remote deep","n":20,"min_ns":65.7,"median_ns":91.1,"mean_ns":87.7,"p95_ns":100.3,"max_ns":110.8,"stddev_ns":11.9},
+    {"group":"micro/path","name":"parse local absolute","n":20,"min_ns":12.2,"median_ns":12.6,"mean_ns":14.6,"p95_ns":16.3,"max_ns":32.9,"stddev_ns":4.6},
+    {"group":"micro/path","name":"parse invalid","n":20,"min_ns":46.3,"median_ns":57.0,"mean_ns":58.7,"p95_ns":73.5,"max_ns":75.4,"stddev_ns":8.9},
+    {"group":"micro/object-key","name":"normalize logical deep","n":20,"min_ns":261.8,"median_ns":281.6,"mean_ns":283.9,"p95_ns":302.9,"max_ns":335.0,"stddev_ns":18.0},
+    {"group":"micro/object-key","name":"normalize logical colon","n":20,"min_ns":95.4,"median_ns":110.5,"mean_ns":111.1,"p95_ns":128.6,"max_ns":131.1,"stddev_ns":10.8},
+    {"group":"micro/object-key","name":"normalize windows portable","n":20,"min_ns":461.8,"median_ns":476.2,"mean_ns":491.2,"p95_ns":591.8,"max_ns":622.9,"stddev_ns":41.9},
+    {"group":"micro/object-key","name":"normalize windows reject","n":20,"min_ns":75.3,"median_ns":78.2,"mean_ns":79.0,"p95_ns":87.7,"max_ns":92.5,"stddev_ns":4.6},
+    {"group":"micro/object-key","name":"relative local path","n":20,"min_ns":146.2,"median_ns":153.0,"mean_ns":153.9,"p95_ns":161.3,"max_ns":164.7,"stddev_ns":5.5},
+    {"group":"micro/alias","name":"header parse valid","n":20,"min_ns":56.6,"median_ns":58.0,"mean_ns":62.5,"p95_ns":76.2,"max_ns":78.1,"stddev_ns":7.2},
+    {"group":"micro/alias","name":"header parse invalid","n":20,"min_ns":39.1,"median_ns":53.7,"mean_ns":51.0,"p95_ns":63.7,"max_ns":69.0,"stddev_ns":10.1},
+    {"group":"micro/alias","name":"endpoint validate","n":20,"min_ns":379.0,"median_ns":400.8,"mean_ns":410.4,"p95_ns":463.7,"max_ns":546.4,"stddev_ns":37.5},
+    {"group":"micro/alias","name":"endpoint reject credentials","n":20,"min_ns":16.9,"median_ns":17.4,"mean_ns":19.1,"p95_ns":22.7,"max_ns":29.4,"stddev_ns":3.1},
+    {"group":"micro/retry","name":"classify retryable","n":20,"min_ns":28.4,"median_ns":34.3,"mean_ns":35.1,"p95_ns":42.7,"max_ns":49.4,"stddev_ns":5.5},
+    {"group":"micro/retry","name":"classify terminal","n":20,"min_ns":2.6,"median_ns":2.9,"mean_ns":2.8,"p95_ns":2.9,"max_ns":3.1,"stddev_ns":0.1},
+    {"group":"micro/options","name":"read options version","n":20,"min_ns":7.0,"median_ns":7.2,"mean_ns":7.7,"p95_ns":7.4,"max_ns":16.9,"stddev_ns":2.2},
+    {"group":"micro/options","name":"metadata validate","n":20,"min_ns":179.6,"median_ns":197.8,"mean_ns":211.1,"p95_ns":286.7,"max_ns":292.6,"stddev_ns":35.3},
+    {"group":"micro/config","name":"serialize 128 aliases","n":20,"min_ns":183749.2,"median_ns":195840.1,"mean_ns":194795.3,"p95_ns":200254.1,"max_ns":208661.6,"stddev_ns":5826.5},
+    {"group":"micro/config","name":"parse 128 aliases","n":20,"min_ns":328063.4,"median_ns":335647.5,"mean_ns":337853.8,"p95_ns":355913.4,"max_ns":369689.6,"stddev_ns":10319.6},
+    {"group":"e2e/startup","name":"--version","n":20,"min_ns":4725896.0,"median_ns":5372209.0,"mean_ns":5307368.2,"p95_ns":5826738.0,"max_ns":6107012.0,"stddev_ns":356108.1},
+    {"group":"e2e/startup","name":"--help","n":20,"min_ns":4980468.0,"median_ns":5443937.0,"mean_ns":5479220.3,"p95_ns":5966281.0,"max_ns":6095628.0,"stddev_ns":290688.5},
+    {"group":"e2e/startup","name":"completions bash","n":20,"min_ns":26691610.0,"median_ns":28557076.0,"mean_ns":28562304.3,"p95_ns":31032609.0,"max_ns":32424620.0,"stddev_ns":1528160.1},
+    {"group":"e2e/alias","name":"set anonymous","n":20,"min_ns":5727004.0,"median_ns":6201997.0,"mean_ns":6318792.2,"p95_ns":7014462.0,"max_ns":7786700.0,"stddev_ns":500008.6},
+    {"group":"e2e/alias","name":"remove","n":20,"min_ns":5728750.0,"median_ns":6251234.0,"mean_ns":6251894.5,"p95_ns":6860671.0,"max_ns":6879598.0,"stddev_ns":360791.4},
+    {"group":"e2e/alias","name":"list 128 aliases","n":20,"min_ns":7286145.0,"median_ns":8306809.0,"mean_ns":8305147.5,"p95_ns":9214190.0,"max_ns":9505919.0,"stddev_ns":586123.1},
+    {"group":"e2e/local","name":"cp local-to-local error","n":20,"min_ns":5855582.0,"median_ns":6190612.0,"mean_ns":6321177.2,"p95_ns":7139199.0,"max_ns":7200241.0,"stddev_ns":408603.3},
+    {"group":"e2e/s3","name":"ls buckets json","n":20,"min_ns":18973145.0,"median_ns":20043676.0,"mean_ns":20277358.6,"p95_ns":22032762.0,"max_ns":22348865.0,"stddev_ns":900260.0},
+    {"group":"e2e/s3","name":"ls 1000 objects json","n":20,"min_ns":24165372.0,"median_ns":25480418.0,"mean_ns":25760283.8,"p95_ns":27551848.0,"max_ns":27627835.0,"stddev_ns":870168.6}
+  ]
+}

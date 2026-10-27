@@ -1,0 +1,30 @@
+# Performance bench for the rc CLI, kept outside the main workspace like `fuzz/`.
+#
+# Deliberately dependency-light: no criterion, no async runtime, only the
+# library under test plus TOML/JSON support for fixtures and machine-readable
+# results. The harness is observational: it is not part of `make check` or the
+# release pipeline.
+[package]
+name = "rc-bench"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.99"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "rc-bench"
+path = "src/main.rs"
+
+[dependencies]
+rc-core = { path = "../crates/core" }
+serde_json = "1"
+tempfile = "3"
+toml = "0.9"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+overflow-checks = false
