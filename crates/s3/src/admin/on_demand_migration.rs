@@ -21,7 +21,7 @@ use zeroize::Zeroizing;
 
 /// Message for a 404 that is not one of the route's own not-found answers:
 /// the whole route family is absent, so the server predates the feature.
-pub const UNSUPPORTED_MESSAGE: &str = "server does not support on-demand migration";
+pub(super) const UNSUPPORTED_MESSAGE: &str = "server does not support on-demand migration";
 
 /// Error codes the route family answers 404 with when the route itself exists.
 const KNOWN_NOT_FOUND_CODES: &[&str] =
@@ -87,7 +87,7 @@ impl AdminClient {
             .await?;
         let write = !matches!(method, Method::GET | Method::HEAD);
         let mut request = self.http_client.request(method, &url);
-        for (name, value) in signed_headers.iter() {
+        for (name, value) in &signed_headers {
             request = request.header(name, value);
         }
         if let Some(body) = body {
@@ -150,7 +150,7 @@ impl AdminClient {
 /// | 409 (a backfill job holds the lease) | conflict | 6 |
 /// | 501 (provider excluded at build time) | unsupported | 7 |
 /// | 408 / 429 / 5xx | network | 3 |
-pub(crate) fn map_on_demand_migration_error(status: StatusCode, body: &str) -> Error {
+pub(super) fn map_on_demand_migration_error(status: StatusCode, body: &str) -> Error {
     let structured = parse_admin_error(body);
     let code = structured.as_ref().and_then(|error| error.code.clone());
     let message = structured

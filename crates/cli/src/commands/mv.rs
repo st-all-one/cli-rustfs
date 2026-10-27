@@ -55,7 +55,7 @@ struct MvOutput {
 }
 
 /// Execute the mv command
-pub async fn execute(args: MvArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: MvArgs, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
     let alias_manager = AliasManager::new().ok();
 
@@ -118,7 +118,7 @@ fn parse_mv_path(path: &str, alias_manager: Option<&AliasManager>) -> rc_core::R
 }
 
 async fn move_local_to_s3(
-    src: &std::path::Path,
+    src: &Path,
     dst: &RemotePath,
     args: &MvArgs,
     formatter: &Formatter,
@@ -171,7 +171,7 @@ async fn move_local_to_s3(
 
 async fn move_s3_to_local(
     src: &RemotePath,
-    dst: &std::path::Path,
+    dst: &Path,
     args: &MvArgs,
     formatter: &Formatter,
 ) -> ExitCode {
@@ -216,12 +216,11 @@ async fn move_s3_to_local(
             }
         };
 
-        let alias = match alias_manager.get(&src.alias) {
-            Ok(a) => a,
-            Err(_) => {
-                formatter.error(&format!("Alias '{}' not found", src.alias));
-                return ExitCode::NotFound;
-            }
+        let alias = if let Ok(a) = alias_manager.get(&src.alias) {
+            a
+        } else {
+            formatter.error(&format!("Alias '{}' not found", src.alias));
+            return ExitCode::NotFound;
         };
 
         let client = match S3Client::new(alias).await {
@@ -256,12 +255,11 @@ async fn move_s3_prefix_to_local(
             return ExitCode::GeneralError;
         }
     };
-    let alias = match alias_manager.get(&src.alias) {
-        Ok(alias) => alias,
-        Err(_) => {
-            formatter.error(&format!("Alias '{}' not found", src.alias));
-            return ExitCode::NotFound;
-        }
+    let alias = if let Ok(alias) = alias_manager.get(&src.alias) {
+        alias
+    } else {
+        formatter.error(&format!("Alias '{}' not found", src.alias));
+        return ExitCode::NotFound;
     };
     let client = match S3Client::new(alias).await {
         Ok(client) => client,
@@ -354,8 +352,7 @@ async fn move_s3_prefix_to_local(
         {
             errors += 1;
             formatter.error(&format!(
-                "Downloaded but failed to delete source '{}': {error}",
-                object
+                "Downloaded but failed to delete source '{object}': {error}"
             ));
             if !args.continue_on_error {
                 return ExitCode::GeneralError;
@@ -388,37 +385,34 @@ async fn copy_for_move(
     target: &RemotePath,
     encryption: Option<&ObjectEncryptionRequest>,
 ) -> rc_core::Result<MoveCopyResult> {
-    match target_client {
-        Some(target_client) => {
-            let result = cp::copy_object_across_aliases(
-                source_client,
-                target_client,
-                source,
-                target,
-                encryption,
-            )
+    if let Some(target_client) = target_client {
+        let result = cp::copy_object_across_aliases(
+            source_client,
+            target_client,
+            source,
+            target,
+            encryption,
+        )
+        .await?;
+        Ok(MoveCopyResult {
+            object: result.object,
+            source_version_id: result.source_version_id,
+            source_etag: result.source_etag,
+        })
+    } else {
+        let source_info = source_client.head_object(source).await?;
+        let copy_options = CopyObjectOptions::for_source_identity(
+            source_info.version_id.clone(),
+            source_info.etag.clone(),
+        )?;
+        let object = source_client
+            .copy_object_with_options(source, target, &copy_options, encryption)
             .await?;
-            Ok(MoveCopyResult {
-                object: result.object,
-                source_version_id: result.source_version_id,
-                source_etag: result.source_etag,
-            })
-        }
-        None => {
-            let source_info = source_client.head_object(source).await?;
-            let copy_options = CopyObjectOptions::for_source_identity(
-                source_info.version_id.clone(),
-                source_info.etag.clone(),
-            )?;
-            let object = source_client
-                .copy_object_with_options(source, target, &copy_options, encryption)
-                .await?;
-            Ok(MoveCopyResult {
-                object,
-                source_version_id: source_info.version_id,
-                source_etag: source_info.etag,
-            })
-        }
+        Ok(MoveCopyResult {
+            object,
+            source_version_id: source_info.version_id,
+            source_etag: source_info.etag,
+        })
     }
 }
 
@@ -471,11 +465,7 @@ async fn move_s3_to_s3(
     formatter: &Formatter,
 ) -> ExitCode {
     let target = ParsedPath::Remote(dst.clone());
-    let encryption = match crate::commands::cp::parse_destination_encryption(
-        &args.enc_s3,
-        &args.enc_kms,
-        &target,
-    ) {
+    let encryption = match cp::parse_destination_encryption(&args.enc_s3, &args.enc_kms, &target) {
         Ok(encryption) => encryption,
         Err(error) => return formatter.fail(ExitCode::UsageError, &error),
     };
@@ -493,12 +483,11 @@ async fn move_s3_to_s3(
         }
     };
 
-    let alias = match alias_manager.get(&src.alias) {
-        Ok(a) => a,
-        Err(_) => {
-            formatter.error(&format!("Alias '{}' not found", src.alias));
-            return ExitCode::NotFound;
-        }
+    let alias = if let Ok(a) = alias_manager.get(&src.alias) {
+        a
+    } else {
+        formatter.error(&format!("Alias '{}' not found", src.alias));
+        return ExitCode::NotFound;
     };
 
     let client = match S3Client::new(alias).await {
@@ -514,12 +503,11 @@ async fn move_s3_to_s3(
     let target_client = if src.alias == dst.alias {
         None
     } else {
-        let target_alias = match alias_manager.get(&dst.alias) {
-            Ok(a) => a,
-            Err(_) => {
-                formatter.error(&format!("Alias '{}' not found", dst.alias));
-                return ExitCode::NotFound;
-            }
+        let target_alias = if let Ok(a) = alias_manager.get(&dst.alias) {
+            a
+        } else {
+            formatter.error(&format!("Alias '{}' not found", dst.alias));
+            return ExitCode::NotFound;
         };
         match S3Client::new(target_alias).await {
             Ok(c) => Some(c),
@@ -566,14 +554,13 @@ async fn move_s3_to_s3(
             if !list_result.truncated {
                 break;
             }
-            continuation_token = match list_result.continuation_token.clone() {
-                Some(token) => Some(token),
-                None => {
-                    formatter.error(
-                        "Backend indicated truncated results but did not provide a continuation token; stopping to avoid an infinite loop.",
-                    );
-                    return ExitCode::GeneralError;
-                }
+            continuation_token = if let Some(token) = list_result.continuation_token.clone() {
+                Some(token)
+            } else {
+                formatter.error(
+                    "Backend indicated truncated results but did not provide a continuation token; stopping to avoid an infinite loop.",
+                );
+                return ExitCode::GeneralError;
             };
         }
 
@@ -585,8 +572,8 @@ async fn move_s3_to_s3(
             } else {
                 error_count += 1;
                 formatter.error(&format!(
-                    "Source listing returned key '{}' outside prefix '{}'",
-                    item.key, src_prefix
+                    "Source listing returned key '{}' outside prefix '{src_prefix}'",
+                    item.key
                 ));
                 if !args.continue_on_error {
                     return ExitCode::GeneralError;
@@ -609,9 +596,9 @@ async fn move_s3_to_s3(
             let target_key = if dst.key.is_empty() {
                 relative.clone()
             } else if dst.key.ends_with('/') {
-                format!("{}{}", dst.key, relative)
+                format!("{}{relative}", dst.key)
             } else {
-                format!("{}/{}", dst.key, relative)
+                format!("{}/{relative}", dst.key)
             };
 
             let src_obj = RemotePath::new(&src.alias, &src.bucket, &item.key);

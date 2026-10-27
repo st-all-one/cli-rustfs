@@ -8,7 +8,7 @@ use rc_core::{
 };
 use rc_s3::S3Client;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use super::object_identity::identity_etag_from_metadata;
@@ -142,20 +142,18 @@ pub async fn execute(args: DiffArgs, output_config: OutputConfig) -> ExitCode {
     };
 
     // Create clients for both paths
-    let first_alias = match alias_manager.get(&first_path.alias) {
-        Ok(a) => a,
-        Err(_) => {
-            formatter.error(&format!("Alias '{}' not found", first_path.alias));
-            return ExitCode::NotFound;
-        }
+    let first_alias = if let Ok(a) = alias_manager.get(&first_path.alias) {
+        a
+    } else {
+        formatter.error(&format!("Alias '{}' not found", first_path.alias));
+        return ExitCode::NotFound;
     };
 
-    let second_alias = match alias_manager.get(&second_path.alias) {
-        Ok(a) => a,
-        Err(_) => {
-            formatter.error(&format!("Alias '{}' not found", second_path.alias));
-            return ExitCode::NotFound;
-        }
+    let second_alias = if let Ok(a) = alias_manager.get(&second_path.alias) {
+        a
+    } else {
+        formatter.error(&format!("Alias '{}' not found", second_path.alias));
+        return ExitCode::NotFound;
     };
 
     let first_client = match S3Client::new(first_alias).await {
@@ -286,8 +284,8 @@ async fn list_objects_map(
     client: &S3Client,
     path: &RemotePath,
     recursive: bool,
-) -> Result<HashMap<String, FileInfo>, rc_core::Error> {
-    let mut objects = HashMap::new();
+) -> Result<BTreeMap<String, FileInfo>, rc_core::Error> {
+    let mut objects = BTreeMap::new();
     let mut continuation_token: Option<String> = None;
     let base_prefix = &path.key;
 
@@ -401,8 +399,8 @@ fn second_needs_identity_lookup(first: &FileInfo, second: &FileInfo, compare: Co
 async fn enrich_second_identity(
     client: &S3Client,
     path: &RemotePath,
-    first: &HashMap<String, FileInfo>,
-    second: &mut HashMap<String, FileInfo>,
+    first: &BTreeMap<String, FileInfo>,
+    second: &mut BTreeMap<String, FileInfo>,
     compare: CompareMode,
 ) {
     let pending: Vec<String> = second
@@ -444,8 +442,8 @@ fn second_snapshot_matches_head(listed: &FileInfo, head: &ObjectInfo) -> bool {
 }
 
 fn compare_objects(
-    first: &HashMap<String, FileInfo>,
-    second: &HashMap<String, FileInfo>,
+    first: &BTreeMap<String, FileInfo>,
+    second: &BTreeMap<String, FileInfo>,
     diff_only: bool,
     compare: CompareMode,
 ) -> Vec<DiffEntry> {
@@ -529,8 +527,8 @@ mod tests {
         }
     }
 
-    fn one(key: &str, info: FileInfo) -> HashMap<String, FileInfo> {
-        HashMap::from([(key.to_string(), info)])
+    fn one(key: &str, info: FileInfo) -> BTreeMap<String, FileInfo> {
+        BTreeMap::from([(key.to_string(), info)])
     }
 
     #[test]
@@ -566,7 +564,7 @@ mod tests {
         head.etag = Some("changed-etag".to_string());
         assert!(!second_snapshot_matches_head(&listed, &head));
 
-        let mut conflicted = listed.clone();
+        let mut conflicted = listed;
         conflicted.snapshot_conflict = true;
         assert!(!objects_match(
             &entry(100, Some("listed-etag")),
@@ -588,7 +586,7 @@ mod tests {
     #[test]
     fn test_compare_objects_only_first() {
         let first = one("file.txt", entry(100, None));
-        let second = HashMap::new();
+        let second = BTreeMap::new();
 
         let entries = compare_objects(&first, &second, false, CompareMode::Auto);
         assert_eq!(entries.len(), 1);
@@ -597,7 +595,7 @@ mod tests {
 
     #[test]
     fn test_compare_objects_only_second() {
-        let first = HashMap::new();
+        let first = BTreeMap::new();
         let second = one("file.txt", entry(100, None));
 
         let entries = compare_objects(&first, &second, false, CompareMode::Auto);
@@ -746,7 +744,7 @@ mod tests {
             "an unknown source size cannot be reconciled by metadata"
         );
 
-        let mut no_etag = source.clone();
+        let mut no_etag = source;
         no_etag.etag = None;
         assert!(
             !second_needs_identity_lookup(&no_etag, &mismatched, CompareMode::Auto),
@@ -756,11 +754,11 @@ mod tests {
 
     #[test]
     fn diff_only_hides_matching_entries_in_auto_mode() {
-        let first = HashMap::from([
+        let first = BTreeMap::from([
             ("same.txt".to_string(), entry(100, Some("source-etag"))),
             ("changed.txt".to_string(), entry(100, Some("source-etag"))),
         ]);
-        let second = HashMap::from([
+        let second = BTreeMap::from([
             (
                 "same.txt".to_string(),
                 entry_with_identity(100, "multipart-etag-1", "source-etag"),

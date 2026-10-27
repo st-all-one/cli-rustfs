@@ -20,9 +20,8 @@ impl BucketMetadataArchive {
     pub fn new(bytes: Vec<u8>) -> Result<Self> {
         if bytes.len() > MAX_BUCKET_METADATA_ARCHIVE_BYTES {
             return Err(crate::Error::RequestRejected(format!(
-                "Bucket metadata archive size {} exceeds the {} byte limit",
-                bytes.len(),
-                MAX_BUCKET_METADATA_ARCHIVE_BYTES
+                "Bucket metadata archive size {} exceeds the {MAX_BUCKET_METADATA_ARCHIVE_BYTES} byte limit",
+                bytes.len()
             )));
         }
         Ok(Self {

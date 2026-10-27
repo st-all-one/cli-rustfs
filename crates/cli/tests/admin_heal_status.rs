@@ -1,3 +1,13 @@
+#![allow(
+    clippy::expect_used,
+    clippy::expect_fun_call,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    let_underscore_drop,
+    clippy::large_stack_arrays,
+    reason = "test fixtures and assertions fail fast with actionable diagnostics"
+)]
 #![cfg(not(windows))]
 
 mod admin_support;
@@ -187,7 +197,7 @@ fn missing_coverage_counts_stay_unknown_and_legacy_state_still_works() {
     assert!(warning.contains("incomplete"));
 
     for (response, healing, label) in [
-        (r#"{}"#, false, "Idle"),
+        (r"{}", false, "Idle"),
         (r#"{"healQueueLength":1}"#, true, "In Progress"),
         (r#"{"currentScanMode":2}"#, true, "In Progress"),
     ] {

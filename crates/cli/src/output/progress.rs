@@ -10,16 +10,22 @@ use super::OutputConfig;
 /// Handles progress display based on output configuration.
 /// In quiet or JSON mode, progress is suppressed.
 #[derive(Debug)]
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "public compatibility surface kept for upcoming commands"
+)]
 pub struct ProgressBar {
     config: OutputConfig,
     bar: Option<indicatif::ProgressBar>,
 }
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "public compatibility surface kept for upcoming commands"
+)]
 impl ProgressBar {
     /// Create a new progress bar with the given total size
-    pub fn new(config: OutputConfig, total: u64) -> Self {
+    pub(crate) fn new(config: OutputConfig, total: u64) -> Self {
         let bar = if config.quiet || config.json || config.no_progress {
             None
         } else {
@@ -27,7 +33,7 @@ impl ProgressBar {
             bar.set_style(
                 indicatif::ProgressStyle::default_bar()
                     .template("{spinner:.green} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-                    .expect("valid template")
+                    .unwrap_or_else(|_| indicatif::ProgressStyle::default_bar())
                     .progress_chars("#>-"),
             );
             Some(bar)
@@ -37,7 +43,7 @@ impl ProgressBar {
     }
 
     /// Create a spinner for indeterminate progress
-    pub fn spinner(config: OutputConfig, message: &str) -> Self {
+    pub(crate) fn spinner(config: OutputConfig, message: &str) -> Self {
         let bar = if config.quiet || config.json || config.no_progress {
             None
         } else {
@@ -45,7 +51,7 @@ impl ProgressBar {
             bar.set_style(
                 indicatif::ProgressStyle::default_spinner()
                     .template("{spinner:.green} {msg}")
-                    .expect("valid template"),
+                    .unwrap_or_else(|_| indicatif::ProgressStyle::default_spinner()),
             );
             bar.set_message(message.to_string());
             bar.enable_steady_tick(std::time::Duration::from_millis(100));
@@ -56,42 +62,42 @@ impl ProgressBar {
     }
 
     /// Update progress
-    pub fn set_position(&self, pos: u64) {
+    pub(crate) fn set_position(&self, pos: u64) {
         if let Some(bar) = &self.bar {
             bar.set_position(pos);
         }
     }
 
     /// Increment progress
-    pub fn inc(&self, delta: u64) {
+    pub(crate) fn inc(&self, delta: u64) {
         if let Some(bar) = &self.bar {
             bar.inc(delta);
         }
     }
 
     /// Set message
-    pub fn set_message(&self, message: &str) {
+    pub(crate) fn set_message(&self, message: &str) {
         if let Some(bar) = &self.bar {
             bar.set_message(message.to_string());
         }
     }
 
     /// Finish with a message
-    pub fn finish_with_message(&self, message: &str) {
+    pub(crate) fn finish_with_message(&self, message: &str) {
         if let Some(bar) = &self.bar {
             bar.finish_with_message(message.to_string());
         }
     }
 
     /// Finish and clear the progress bar
-    pub fn finish_and_clear(&self) {
+    pub(crate) fn finish_and_clear(&self) {
         if let Some(bar) = &self.bar {
             bar.finish_and_clear();
         }
     }
 
     /// Check if progress bar is visible
-    pub fn is_visible(&self) -> bool {
+    pub(crate) fn is_visible(&self) -> bool {
         self.bar.is_some()
     }
 }

@@ -104,7 +104,7 @@ struct NotificationOperationOutput {
 }
 
 /// Execute the event command
-pub async fn execute(args: EventArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: EventArgs, output_config: OutputConfig) -> ExitCode {
     match args.command {
         EventCommands::Add(args) => execute_add(args, output_config).await,
         EventCommands::List(args) => execute_list(args, output_config).await,
@@ -145,10 +145,9 @@ async fn execute_list(args: BucketArg, output_config: OutputConfig) -> ExitCode 
                 for item in notifications {
                     let events = item.events.join(", ");
                     formatter.println(&format!(
-                        "  [{}] {} -> {}",
+                        "  [{}] {} -> {events}",
                         item.target_string(),
-                        item.arn,
-                        events
+                        item.arn
                     ));
                 }
             }
@@ -434,8 +433,7 @@ fn infer_target_from_arn(arn: &str) -> Result<NotificationTarget, String> {
         Ok(NotificationTarget::Lambda)
     } else {
         Err(format!(
-            "Unsupported ARN '{}'. Expected SQS/SNS/Lambda ARN",
-            arn
+            "Unsupported ARN '{arn}'. Expected SQS/SNS/Lambda ARN"
         ))
     }
 }
@@ -534,7 +532,7 @@ mod tests {
 
     #[test]
     fn test_parse_event_list_defaults_when_inputs_are_blank() {
-        let events = parse_event_list(&[" , ,  ".to_string(), "".to_string()]);
+        let events = parse_event_list(&[" , ,  ".to_string(), String::new()]);
 
         assert_eq!(events, vec!["s3:ObjectCreated:*".to_string()]);
     }

@@ -140,8 +140,8 @@ impl ConfigManager {
             config = self.migrate(config)?;
         } else if config.schema_version > SCHEMA_VERSION {
             return Err(Error::Config(format!(
-                "Configuration file version {} is newer than supported version {}. Please upgrade rc.",
-                config.schema_version, SCHEMA_VERSION
+                "Configuration file version {} is newer than supported version {SCHEMA_VERSION}. Please upgrade rc.",
+                config.schema_version
             )));
         }
 
@@ -201,7 +201,9 @@ impl ConfigManager {
 
 impl Default for ConfigManager {
     fn default() -> Self {
-        Self::new().expect("Failed to create default ConfigManager")
+        // `new()` only fails when the platform config directory is unavailable;
+        // keep `Default` panic-free and fall back to the documented relative path.
+        Self::new().unwrap_or_else(|_| Self::with_path(PathBuf::from("config.toml")))
     }
 }
 
@@ -349,9 +351,9 @@ mod tests {
         let (manager, _temp_dir) = temp_config_manager();
 
         let content = format!(
-            r#"
+            r"
             schema_version = {}
-            "#,
+            ",
             SCHEMA_VERSION + 1
         );
         std::fs::write(manager.config_path(), content).unwrap();

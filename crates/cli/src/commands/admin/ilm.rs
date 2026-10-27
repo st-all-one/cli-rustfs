@@ -114,7 +114,7 @@ struct ManualTransitionJobSuccessOutput<'a> {
     data: &'a ManualTransitionJobResponse,
 }
 
-pub async fn execute(command: IlmCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(command: IlmCommands, formatter: &Formatter) -> ExitCode {
     match command {
         IlmCommands::Transition(TransitionCommands::Run(args)) => {
             execute_manual_transition_run(args, formatter).await

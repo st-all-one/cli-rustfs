@@ -366,11 +366,7 @@ impl OidcMutationRequest {
                 "OIDC display name cannot be empty".to_string(),
             ));
         }
-        if self
-            .client_secret
-            .as_ref()
-            .is_some_and(|secret| secret.is_empty())
-        {
+        if self.client_secret.as_ref().is_some_and(String::is_empty) {
             return Err(Error::InvalidPath(
                 "OIDC client secret cannot be empty".to_string(),
             ));

@@ -43,7 +43,7 @@ struct PoolListOutput {
 }
 
 /// Execute a pool subcommand
-pub async fn execute(cmd: PoolCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(cmd: PoolCommands, formatter: &Formatter) -> ExitCode {
     match cmd {
         PoolCommands::List(args) => execute_list(args, formatter).await,
         PoolCommands::Status(args) => execute_status(args, formatter).await,

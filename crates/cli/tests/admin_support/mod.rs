@@ -1,3 +1,14 @@
+#![allow(
+    clippy::expect_used,
+    clippy::expect_fun_call,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    let_underscore_drop,
+    clippy::large_stack_arrays,
+    reason = "test fixtures and assertions fail fast with actionable diagnostics"
+)]
+
 use std::io::{ErrorKind, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
@@ -5,15 +16,27 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "shared test helper; not every integration binary uses every item"
+)]
 #[derive(Debug)]
 pub struct CapturedAdminRequest {
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "shared test helper; not every integration binary uses every item"
+    )]
     pub method: String,
     pub target: String,
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "shared test helper; not every integration binary uses every item"
+    )]
     pub headers: String,
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "shared test helper; not every integration binary uses every item"
+    )]
     pub body: Vec<u8>,
 }
 
@@ -91,7 +114,10 @@ fn read_admin_request(stream: &mut TcpStream) -> CapturedAdminRequest {
 
 // Each integration-test binary compiles this shared module independently, so a
 // helper used by one binary can legitimately be unused by another.
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "shared test helper; not every integration binary uses every item"
+)]
 pub fn start_admin_test_server(
     response_body: &'static str,
 ) -> (String, Receiver<CapturedAdminRequest>, JoinHandle<()>) {
@@ -120,9 +146,8 @@ pub fn start_admin_test_server(
         sender.send(request).expect("send captured request");
 
         let response = format!(
-            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
-            response_body.len(),
-            response_body
+            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{response_body}",
+            response_body.len()
         );
         stream
             .write_all(response.as_bytes())
@@ -132,7 +157,10 @@ pub fn start_admin_test_server(
     (endpoint, receiver, handle)
 }
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "shared test helper; not every integration binary uses every item"
+)]
 pub fn start_admin_test_server_with_endpoint_response(
     response_template: &'static str,
 ) -> (String, Receiver<CapturedAdminRequest>, JoinHandle<()>) {
@@ -162,9 +190,8 @@ pub fn start_admin_test_server_with_endpoint_response(
         sender.send(request).expect("send captured request");
 
         let response = format!(
-            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
-            response_body.len(),
-            response_body
+            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{response_body}",
+            response_body.len()
         );
         stream
             .write_all(response.as_bytes())
@@ -174,7 +201,10 @@ pub fn start_admin_test_server_with_endpoint_response(
     (endpoint, receiver, handle)
 }
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "shared test helper; not every integration binary uses every item"
+)]
 pub fn start_admin_response_test_server(
     response_status: &str,
     content_type: &str,
@@ -218,7 +248,10 @@ pub fn start_admin_response_test_server(
     (endpoint, receiver, handle)
 }
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "shared test helper; not every integration binary uses every item"
+)]
 pub fn start_admin_sequence_test_server(
     responses: Vec<(&'static str, &'static str)>,
 ) -> (String, Receiver<CapturedAdminRequest>, JoinHandle<()>) {
@@ -248,9 +281,8 @@ pub fn start_admin_sequence_test_server(
             sender.send(request).expect("send captured request");
 
             let response = format!(
-                "HTTP/1.1 {response_status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
-                response_body.len(),
-                response_body
+                "HTTP/1.1 {response_status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{response_body}",
+                response_body.len()
             );
             stream
                 .write_all(response.as_bytes())
@@ -261,7 +293,10 @@ pub fn start_admin_sequence_test_server(
     (endpoint, receiver, handle)
 }
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "shared test helper; not every integration binary uses every item"
+)]
 pub fn start_admin_binary_sequence_test_server(
     responses: Vec<(&'static str, &'static str, Vec<u8>)>,
 ) -> (String, Receiver<CapturedAdminRequest>, JoinHandle<()>) {

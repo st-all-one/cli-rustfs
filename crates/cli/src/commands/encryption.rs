@@ -104,7 +104,7 @@ struct BucketEncryptionOutput {
 }
 
 /// Execute the encryption command
-pub async fn execute(args: EncryptionArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: EncryptionArgs, output_config: OutputConfig) -> ExitCode {
     match args.command {
         EncryptionCommands::Set(args) => execute_set(args, output_config).await,
         EncryptionCommands::Info(args) => execute_info(args, output_config).await,

@@ -1,3 +1,14 @@
+#![allow(
+    clippy::expect_used,
+    clippy::expect_fun_call,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    let_underscore_drop,
+    clippy::large_stack_arrays,
+    reason = "test fixtures and assertions fail fast with actionable diagnostics"
+)]
+
 //! CLI help contract tests.
 //!
 //! These tests verify command and option discoverability through `--help` output.
@@ -74,24 +85,21 @@ fn assert_help_case(case: &HelpCase) {
     let normalized_stdout = stdout.replace("Usage: rc.exe ", "Usage: rc ");
     assert!(
         normalized_stdout.contains(case.usage),
-        "usage marker `{}` missing for {command_label}\nstdout:\n{}",
-        case.usage,
-        stdout
+        "usage marker `{}` missing for {command_label}\nstdout:\n{stdout}",
+        case.usage
     );
 
     for option in GLOBAL_OPTIONS {
         assert!(
             stdout.contains(option),
-            "global option `{option}` missing in help for {command_label}\nstdout:\n{}",
-            stdout
+            "global option `{option}` missing in help for {command_label}\nstdout:\n{stdout}"
         );
     }
 
     for token in case.expected_tokens {
         assert!(
             stdout.contains(token),
-            "expected token `{token}` missing in help for {command_label}\nstdout:\n{}",
-            stdout
+            "expected token `{token}` missing in help for {command_label}\nstdout:\n{stdout}"
         );
     }
 }

@@ -228,7 +228,7 @@ impl Default for Theme {
 
 impl Theme {
     /// Returns a theme with no styling (for no-color mode)
-    pub fn plain() -> Self {
+    pub(crate) fn plain() -> Self {
         Self {
             dir: Style::new(),
             file: Style::new(),
@@ -250,16 +250,22 @@ impl Theme {
 /// Handles both human-readable and JSON output formats based on configuration.
 /// When JSON mode is enabled, all output is strict JSON without colors or progress.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "public compatibility surface kept for upcoming commands"
+)]
 pub struct Formatter {
     config: OutputConfig,
     theme: Theme,
 }
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "public compatibility surface kept for upcoming commands"
+)]
 impl Formatter {
     /// Create a new formatter with the given configuration
-    pub fn new(config: OutputConfig) -> Self {
+    pub(crate) fn new(config: OutputConfig) -> Self {
         let theme = if config.no_color || config.json {
             Theme::plain()
         } else {
@@ -269,34 +275,34 @@ impl Formatter {
     }
 
     /// Check if JSON output mode is enabled
-    pub fn is_json(&self) -> bool {
+    pub(crate) fn is_json(&self) -> bool {
         self.config.json
     }
 
     /// Check if quiet mode is enabled
-    pub fn is_quiet(&self) -> bool {
+    pub(crate) fn is_quiet(&self) -> bool {
         self.config.quiet
     }
 
     /// Check if colors are enabled
-    pub fn colors_enabled(&self) -> bool {
+    pub(crate) fn colors_enabled(&self) -> bool {
         !self.config.no_color && !self.config.json
     }
 
     /// Get the current theme
-    pub fn theme(&self) -> &Theme {
+    pub(crate) fn theme(&self) -> &Theme {
         &self.theme
     }
 
     /// Get a clone of the output configuration
-    pub fn output_config(&self) -> OutputConfig {
+    pub(crate) fn output_config(&self) -> OutputConfig {
         self.config.clone()
     }
 
     // ========== Style helper methods ==========
 
     /// Style a directory name (blue + bold)
-    pub fn style_dir(&self, text: &str) -> String {
+    pub(crate) fn style_dir(&self, text: &str) -> String {
         self.theme
             .dir
             .apply_to(self.sanitize_text(text))
@@ -304,7 +310,7 @@ impl Formatter {
     }
 
     /// Style a file name (default)
-    pub fn style_file(&self, text: &str) -> String {
+    pub(crate) fn style_file(&self, text: &str) -> String {
         self.theme
             .file
             .apply_to(self.sanitize_text(text))
@@ -312,17 +318,17 @@ impl Formatter {
     }
 
     /// Style a file size (green)
-    pub fn style_size(&self, text: &str) -> String {
+    pub(crate) fn style_size(&self, text: &str) -> String {
         self.theme.size.apply_to(text).to_string()
     }
 
     /// Style a timestamp/date (dim)
-    pub fn style_date(&self, text: &str) -> String {
+    pub(crate) fn style_date(&self, text: &str) -> String {
         self.theme.date.apply_to(text).to_string()
     }
 
     /// Style a property key (cyan)
-    pub fn style_key(&self, text: &str) -> String {
+    pub(crate) fn style_key(&self, text: &str) -> String {
         self.theme
             .key
             .apply_to(self.sanitize_text(text))
@@ -330,7 +336,7 @@ impl Formatter {
     }
 
     /// Style a URL/endpoint (cyan + underline)
-    pub fn style_url(&self, text: &str) -> String {
+    pub(crate) fn style_url(&self, text: &str) -> String {
         self.theme
             .url
             .apply_to(self.sanitize_text(text))
@@ -338,14 +344,14 @@ impl Formatter {
     }
 
     /// Style an alias/bucket name (bold)
-    pub fn style_name(&self, text: &str) -> String {
+    pub(crate) fn style_name(&self, text: &str) -> String {
         self.theme
             .name
             .apply_to(self.sanitize_text(text))
             .to_string()
     }
 
-    pub fn sanitize_text(&self, text: &str) -> String {
+    pub(crate) fn sanitize_text(&self, text: &str) -> String {
         let mut sanitized = String::with_capacity(text.len());
         for character in text.chars() {
             match character {
@@ -371,7 +377,7 @@ impl Formatter {
     }
 
     /// Style tree branch characters (dim)
-    pub fn style_tree_branch(&self, text: &str) -> String {
+    pub(crate) fn style_tree_branch(&self, text: &str) -> String {
         self.theme.tree_branch.apply_to(text).to_string()
     }
 
@@ -381,7 +387,7 @@ impl Formatter {
     ///
     /// In JSON mode, serializes the value to JSON.
     /// In human mode, uses the Display implementation.
-    pub fn output<T: Serialize + std::fmt::Display>(&self, value: &T) {
+    pub(crate) fn output<T: Serialize + std::fmt::Display>(&self, value: &T) {
         if self.config.quiet {
             return;
         }
@@ -398,7 +404,7 @@ impl Formatter {
     }
 
     /// Output a success message
-    pub fn success(&self, message: &str) {
+    pub(crate) fn success(&self, message: &str) {
         if self.config.quiet {
             return;
         }
@@ -415,28 +421,28 @@ impl Formatter {
     /// Output an error message
     ///
     /// Errors are always printed, even in quiet mode.
-    pub fn error(&self, message: &str) {
+    pub(crate) fn error(&self, message: &str) {
         self.emit_error(ErrorDescriptor::from_message(message));
     }
 
     /// Output an error message with an explicit exit code.
-    pub fn error_with_code(&self, code: ExitCode, message: &str) {
+    pub(crate) fn error_with_code(&self, code: ExitCode, message: &str) {
         self.emit_error(ErrorDescriptor::from_code(code, message));
     }
 
     /// Output an error message with an explicit exit code and recovery suggestion.
-    pub fn error_with_suggestion(&self, code: ExitCode, message: &str, suggestion: &str) {
+    pub(crate) fn error_with_suggestion(&self, code: ExitCode, message: &str, suggestion: &str) {
         self.emit_error(ErrorDescriptor::from_code(code, message).with_suggestion(suggestion));
     }
 
     /// Print an error and return the provided exit code.
-    pub fn fail(&self, code: ExitCode, message: &str) -> ExitCode {
+    pub(crate) fn fail(&self, code: ExitCode, message: &str) -> ExitCode {
         self.error_with_code(code, message);
         code
     }
 
     /// Print an error with a recovery hint and return the provided exit code.
-    pub fn fail_with_suggestion(
+    pub(crate) fn fail_with_suggestion(
         &self,
         code: ExitCode,
         message: &str,
@@ -460,7 +466,7 @@ impl Formatter {
     }
 
     /// Output a warning message
-    pub fn warning(&self, message: &str) {
+    pub(crate) fn warning(&self, message: &str) {
         if self.config.quiet || self.config.json {
             return;
         }
@@ -472,7 +478,7 @@ impl Formatter {
     /// Output JSON directly
     ///
     /// Used when you want to output a pre-built JSON structure.
-    pub fn json<T: Serialize>(&self, value: &T) {
+    pub(crate) fn json<T: Serialize>(&self, value: &T) {
         match serde_json::to_string_pretty(value) {
             Ok(json) => println!("{json}"),
             Err(e) => eprintln!("Error serializing output: {e}"),
@@ -480,7 +486,7 @@ impl Formatter {
     }
 
     /// Output one compact JSON Lines record to stdout.
-    pub fn json_line<T: Serialize>(&self, value: &T) {
+    pub(crate) fn json_line<T: Serialize>(&self, value: &T) {
         if self.config.quiet {
             return;
         }
@@ -491,7 +497,7 @@ impl Formatter {
     }
 
     /// Write one compact JSON Lines record to stdout and report output failures.
-    pub fn try_json_line<T: Serialize>(&self, value: &T) -> io::Result<()> {
+    pub(crate) fn try_json_line<T: Serialize>(&self, value: &T) -> io::Result<()> {
         if self.config.quiet {
             return Ok(());
         }
@@ -500,7 +506,7 @@ impl Formatter {
     }
 
     /// Output one compact JSON Lines error record to stderr.
-    pub fn json_line_error<T: Serialize>(&self, value: &T) {
+    pub(crate) fn json_line_error<T: Serialize>(&self, value: &T) {
         match serde_json::to_string(value) {
             Ok(json) => eprintln!("{json}"),
             Err(e) => eprintln!("Error serializing output: {e}"),
@@ -508,7 +514,7 @@ impl Formatter {
     }
 
     /// Output a pre-built JSON error record on stderr.
-    pub fn json_error<T: Serialize>(&self, value: &T) {
+    pub(crate) fn json_error<T: Serialize>(&self, value: &T) {
         match serde_json::to_string_pretty(value) {
             Ok(json) => eprintln!("{json}"),
             Err(e) => eprintln!("Error serializing output: {e}"),
@@ -516,7 +522,7 @@ impl Formatter {
     }
 
     /// Print a line of text (respects quiet mode)
-    pub fn println(&self, message: &str) {
+    pub(crate) fn println(&self, message: &str) {
         if self.config.quiet {
             return;
         }
@@ -524,7 +530,7 @@ impl Formatter {
     }
 
     /// Print a line to stdout and report output failures.
-    pub fn try_println(&self, message: &str) -> io::Result<()> {
+    pub(crate) fn try_println(&self, message: &str) -> io::Result<()> {
         if self.config.quiet {
             return Ok(());
         }

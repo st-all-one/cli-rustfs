@@ -9,6 +9,20 @@
 //! This crate is designed to be independent of any specific S3 SDK,
 //! allowing for easy testing and potential future support for other backends.
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::expect_used,
+        clippy::expect_fun_call,
+        clippy::unwrap_used,
+        clippy::panic,
+        clippy::indexing_slicing,
+        clippy::large_stack_arrays,
+        let_underscore_drop,
+        reason = "unit-test fixtures fail fast with actionable diagnostics"
+    )
+)]
+
 pub mod admin;
 pub mod alias;
 pub mod config;

@@ -1072,7 +1072,7 @@ mod tests {
         let error = info
             .resolve_peer("secondary")
             .expect_err("duplicate names are ambiguous");
-        assert!(matches!(error, crate::Error::Conflict(_)));
+        assert!(matches!(error, Error::Conflict(_)));
     }
 
     #[test]
@@ -1083,7 +1083,7 @@ mod tests {
         let error = info
             .resolve_peer("second")
             .expect_err("partial names must not match");
-        assert!(matches!(error, crate::Error::NotFound(_)));
+        assert!(matches!(error, Error::NotFound(_)));
     }
 
     #[test]

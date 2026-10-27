@@ -54,7 +54,7 @@ struct HealthMeta {
 }
 
 /// Execute a liveness probe.
-pub async fn execute(args: PingArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: PingArgs, output_config: OutputConfig) -> ExitCode {
     execute_probe(
         &args.alias,
         args.timeout,
@@ -127,9 +127,8 @@ pub(super) async fn execute_with_api(
             HEALTH_FAMILY,
             ExitCode::NetworkError,
             format!(
-                "{} probe for '{}' returned HTTP {} ({})",
+                "{} probe for '{alias_name}' returned HTTP {} ({})",
                 probe.as_str(),
-                alias_name,
                 report.status_code,
                 report.status.as_deref().unwrap_or("unhealthy")
             ),
@@ -185,11 +184,10 @@ fn print_human(alias_name: &str, report: &HealthReport, formatter: &Formatter) {
         (None, None) => "unknown service".to_string(),
     };
     formatter.println(&format!(
-        "{} {}{}: {} in {} ms ({identity})",
+        "{} {}{}: {state} in {} ms ({identity})",
         formatter.style_name(alias_name.trim_end_matches('/')),
         formatter.style_url(&report.endpoint),
         report.path,
-        state,
         report.latency_ms
     ));
 }

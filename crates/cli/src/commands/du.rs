@@ -94,7 +94,7 @@ struct UsageMeta {
 }
 
 /// Execute a usage query.
-pub async fn execute(args: DuArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: DuArgs, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
     let mut target = match parse_target(&args.target) {
         Ok(target) => target,
@@ -158,14 +158,15 @@ pub async fn execute(args: DuArgs, output_config: OutputConfig) -> ExitCode {
         None
     };
 
+    let scan_api = scan_client
+        .as_ref()
+        .map(|client| -> &dyn UsageScanApi { client });
     execute_with_apis(
         &args,
         &target,
         &admin,
         &admin,
-        scan_client
-            .as_ref()
-            .map(|client| client as &dyn UsageScanApi),
+        scan_api,
         Timestamp::now(),
         &formatter,
     )
@@ -400,10 +401,7 @@ fn print_human(report: &UsageReport, now: Timestamp, formatter: &Formatter) {
         } else {
             ""
         };
-        formatter.println(&format!(
-            "Snapshot: {} ({} seconds old{stale})",
-            snapshot, age
-        ));
+        formatter.println(&format!("Snapshot: {snapshot} ({age} seconds old{stale})"));
     }
     formatter.println("");
     formatter.println(
@@ -428,8 +426,7 @@ fn print_human(report: &UsageReport, now: Timestamp, formatter: &Formatter) {
     ));
     if let Some(uploads) = report.incomplete_upload_count {
         formatter.println(&format!(
-            "Incomplete: {} upload(s), {}",
-            uploads,
+            "Incomplete: {uploads} upload(s), {}",
             humansize::format_size(
                 report.incomplete_upload_bytes.unwrap_or_default(),
                 humansize::BINARY

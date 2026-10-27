@@ -549,7 +549,7 @@ impl ReplicationMetricsWireEnvelope {
         let failed = minio_failed_totals(self.minio_failed);
         validate_redundant_failed(&failed, &self.minio_failed_count, &self.minio_failed_size)?;
         let queue = self.minio_queue.require("queued")?.try_into_metric()?;
-        let _ = (self.minio_pending_size, self.minio_pending_count, failed);
+        let _pending_totals = (self.minio_pending_size, self.minio_pending_count, failed);
 
         Ok(ReplicationMetrics {
             stats,

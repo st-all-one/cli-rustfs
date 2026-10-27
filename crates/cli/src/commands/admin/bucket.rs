@@ -27,7 +27,7 @@ use crate::output::Formatter;
 use crate::secret_input::{SecretSource, can_prompt};
 
 /// Environment variable read for the source secret key when `--secret-key` is absent.
-pub const SECRET_KEY_ENV: &str = "RC_ODM_SECRET_KEY";
+pub(super) const SECRET_KEY_ENV: &str = "RC_ODM_SECRET_KEY";
 
 const OUTPUT_TYPE: &str = "on_demand_migration";
 
@@ -42,6 +42,10 @@ pub enum BucketCommands {
     Migration(MigrationCommands),
 }
 
+#[allow(
+    clippy::large_enum_variant,
+    reason = "clap subcommand payloads are constructed once at parse time"
+)]
 #[derive(Subcommand, Debug)]
 pub enum MigrationCommands {
     /// Validate, probe and save the source configuration, replacing any existing one
@@ -533,7 +537,7 @@ fn prepare(command: MigrationCommands, formatter: &Formatter) -> Result<Prepared
 // Execution
 // ---------------------------------------------------------------------------
 
-pub async fn execute(command: BucketCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(command: BucketCommands, formatter: &Formatter) -> ExitCode {
     match command {
         BucketCommands::Migration(command) => execute_migration(command, formatter).await,
     }
@@ -714,12 +718,12 @@ async fn watch_backfill(
             ));
         } else if let Some(job) = &result.job {
             // The line is stderr so stdout stays clean for the final document.
-            let _ = term.clear_line();
-            let _ = term.write_str(&formatter.sanitize_text(&backfill_progress_line(job)));
+            drop(term.clear_line());
+            drop(term.write_str(&formatter.sanitize_text(&backfill_progress_line(job))));
         }
         if terminal {
             if !formatter.is_json() {
-                let _ = term.write_line("");
+                drop(term.write_line(""));
                 render_backfill(bucket, result.job.as_ref(), formatter);
             }
             // The stream already carried the final record.
@@ -1601,9 +1605,9 @@ mod tests {
 
     #[tokio::test]
     async fn not_found_conflict_network_and_auth_keep_their_exit_codes() {
-        for (error, expected) in [
+        let cases: [(fn() -> Error, ExitCode); 5] = [
             (
-                (|| Error::NotFound("NoSuchConfiguration".into())) as fn() -> Error,
+                || Error::NotFound("NoSuchConfiguration".into()),
                 ExitCode::NotFound,
             ),
             (
@@ -1616,7 +1620,8 @@ mod tests {
             ),
             (|| Error::Auth("licence".into()), ExitCode::AuthError),
             (|| Error::Config("bad".into()), ExitCode::UsageError),
-        ] {
+        ];
+        for (error, expected) in cases {
             let api = FakeApi {
                 error: Some(error),
                 ..Default::default()

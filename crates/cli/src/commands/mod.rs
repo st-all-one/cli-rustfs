@@ -398,9 +398,7 @@ pub async fn execute(cli: Cli) -> ExitCode {
         Commands::Table(cmd) => {
             table::execute(
                 cmd,
-                &crate::output::Formatter::new(
-                    output_options.resolve(OutputBehavior::StructuredDefault),
-                ),
+                &Formatter::new(output_options.resolve(OutputBehavior::StructuredDefault)),
             )
             .await
         }
@@ -578,7 +576,7 @@ mod tests {
         };
 
         let resolved = options.resolve(OutputBehavior::StructuredDefault);
-        assert_eq!(resolved.json, !std::io::stdout().is_terminal());
+        assert_eq!(resolved.json, !stdout().is_terminal());
     }
 
     #[test]
@@ -638,7 +636,7 @@ mod tests {
         };
 
         let resolved = options.resolve(OutputBehavior::HumanDefault);
-        assert_eq!(resolved.json, !std::io::stdout().is_terminal());
+        assert_eq!(resolved.json, !stdout().is_terminal());
     }
 
     #[test]
@@ -760,9 +758,9 @@ mod tests {
                 bucket::BucketCommands::Cors(cors::CorsCommands::List(arg)) => {
                     assert_eq!(arg.path, "local/my-bucket");
                 }
-                other => panic!("expected bucket cors list command, got {:?}", other),
+                other => panic!("expected bucket cors list command, got {other:?}"),
             },
-            other => panic!("expected bucket command, got {:?}", other),
+            other => panic!("expected bucket command, got {other:?}"),
         }
     }
 
@@ -776,9 +774,9 @@ mod tests {
                 bucket::BucketCommands::List(arg) => {
                     assert_eq!(arg.path, "local/");
                 }
-                other => panic!("expected bucket list alias, got {:?}", other),
+                other => panic!("expected bucket list alias, got {other:?}"),
             },
-            other => panic!("expected bucket command, got {:?}", other),
+            other => panic!("expected bucket command, got {other:?}"),
         }
     }
 
@@ -791,7 +789,7 @@ mod tests {
             Commands::Cors(cors::CorsCommands::Remove(arg)) => {
                 assert_eq!(arg.path, "local/my-bucket");
             }
-            other => panic!("expected top-level cors remove command, got {:?}", other),
+            other => panic!("expected top-level cors remove command, got {other:?}"),
         }
     }
 
@@ -804,7 +802,7 @@ mod tests {
             Commands::Cors(cors::CorsCommands::List(arg)) => {
                 assert_eq!(arg.path, "local/my-bucket");
             }
-            other => panic!("expected top-level cors get alias, got {:?}", other),
+            other => panic!("expected top-level cors get alias, got {other:?}"),
         }
     }
 
@@ -819,7 +817,7 @@ mod tests {
             }) => {
                 assert_eq!(arg.path, "local/my-bucket");
             }
-            other => panic!("expected top-level event list command, got {:?}", other),
+            other => panic!("expected top-level event list command, got {other:?}"),
         }
     }
 
@@ -846,7 +844,7 @@ mod tests {
                 assert_eq!(arg.events, vec!["put,delete".to_string()]);
                 assert!(arg.force);
             }
-            other => panic!("expected top-level event add command, got {:?}", other),
+            other => panic!("expected top-level event add command, got {other:?}"),
         }
     }
 
@@ -875,7 +873,7 @@ mod tests {
                 assert!(matches!(arg.output_format, sql::OutputFormatArg::Json));
                 assert!(matches!(arg.compression, sql::CompressionArg::Gzip));
             }
-            other => panic!("expected sql command, got {:?}", other),
+            other => panic!("expected sql command, got {other:?}"),
         }
     }
 
@@ -897,7 +895,7 @@ mod tests {
                 assert!(matches!(arg.input_format, sql::InputFormatArg::Csv));
                 assert_eq!(arg.csv_input_record_delimiter.as_deref(), Some("\r\n"));
             }
-            other => panic!("expected sql command, got {:?}", other),
+            other => panic!("expected sql command, got {other:?}"),
         }
     }
 
@@ -920,7 +918,7 @@ mod tests {
                 assert!(matches!(arg.output_format, sql::OutputFormatArg::Csv));
                 assert!(matches!(arg.compression, sql::CompressionArg::None));
             }
-            other => panic!("expected sql command, got {:?}", other),
+            other => panic!("expected sql command, got {other:?}"),
         }
     }
 
@@ -934,9 +932,9 @@ mod tests {
                 object::ObjectCommands::List(arg) => {
                     assert_eq!(arg.path, "local/my-bucket/logs/");
                 }
-                other => panic!("expected object list alias, got {:?}", other),
+                other => panic!("expected object list alias, got {other:?}"),
             },
-            other => panic!("expected object command, got {:?}", other),
+            other => panic!("expected object command, got {other:?}"),
         }
     }
 
@@ -960,7 +958,7 @@ mod tests {
                 assert_eq!(arg.arn, "arn:aws:sns:us-east-1:123456789012:alerts");
                 assert!(arg.force);
             }
-            other => panic!("expected top-level event remove command, got {:?}", other),
+            other => panic!("expected top-level event remove command, got {other:?}"),
         }
     }
 
@@ -974,9 +972,9 @@ mod tests {
                 bucket::BucketCommands::Cors(cors::CorsCommands::List(arg)) => {
                     assert_eq!(arg.path, "local/my-bucket");
                 }
-                other => panic!("expected bucket cors get alias, got {:?}", other),
+                other => panic!("expected bucket cors get alias, got {other:?}"),
             },
-            other => panic!("expected bucket command, got {:?}", other),
+            other => panic!("expected bucket command, got {other:?}"),
         }
     }
 
@@ -992,9 +990,9 @@ mod tests {
                     assert_eq!(arg.path, "local/my-bucket");
                     assert_eq!(arg.source.as_deref(), Some("cors.xml"));
                 }
-                other => panic!("expected bucket cors set command, got {:?}", other),
+                other => panic!("expected bucket cors set command, got {other:?}"),
             },
-            other => panic!("expected bucket command, got {:?}", other),
+            other => panic!("expected bucket command, got {other:?}"),
         }
     }
 
@@ -1010,7 +1008,7 @@ mod tests {
                 assert_eq!(arg.file, None);
                 assert!(!arg.force);
             }
-            other => panic!("expected top-level cors set command, got {:?}", other),
+            other => panic!("expected top-level cors set command, got {other:?}"),
         }
     }
 
@@ -1034,7 +1032,7 @@ mod tests {
                 assert_eq!(arg.file.as_deref(), Some("cors.json"));
                 assert!(arg.force);
             }
-            other => panic!("expected top-level cors set command, got {:?}", other),
+            other => panic!("expected top-level cors set command, got {other:?}"),
         }
     }
 
@@ -1050,9 +1048,9 @@ mod tests {
                     assert_eq!(arg.path, "local/my-bucket");
                     assert!(arg.force);
                 }
-                other => panic!("expected bucket cors list command, got {:?}", other),
+                other => panic!("expected bucket cors list command, got {other:?}"),
             },
-            other => panic!("expected bucket command, got {:?}", other),
+            other => panic!("expected bucket command, got {other:?}"),
         }
     }
 
@@ -1076,12 +1074,9 @@ mod tests {
                     assert_eq!(arg.path, "local/my-bucket");
                     assert!(!arg.force);
                 }
-                other => panic!(
-                    "expected bucket lifecycle rule list command, got {:?}",
-                    other
-                ),
+                other => panic!("expected bucket lifecycle rule list command, got {other:?}"),
             },
-            other => panic!("expected bucket command, got {:?}", other),
+            other => panic!("expected bucket command, got {other:?}"),
         }
     }
 
@@ -1098,12 +1093,9 @@ mod tests {
                     assert_eq!(arg.path, "local/my-bucket");
                     assert!(!arg.force);
                 }
-                other => panic!(
-                    "expected bucket replication status command, got {:?}",
-                    other
-                ),
+                other => panic!("expected bucket replication status command, got {other:?}"),
             },
-            other => panic!("expected bucket command, got {:?}", other),
+            other => panic!("expected bucket command, got {other:?}"),
         }
     }
 
@@ -1128,9 +1120,9 @@ mod tests {
                     assert_eq!(arg.path, "local/my-bucket");
                     assert_eq!(arg.prefix.as_deref(), Some("reports/2026/"));
                 }
-                other => panic!("expected bucket replication diff command, got {:?}", other),
+                other => panic!("expected bucket replication diff command, got {other:?}"),
             },
-            other => panic!("expected bucket command, got {:?}", other),
+            other => panic!("expected bucket command, got {other:?}"),
         }
     }
 
@@ -1157,9 +1149,9 @@ mod tests {
                     assert_eq!(arg.remote_bucket, "backup/archive");
                     assert!(arg.insecure);
                 }
-                other => panic!("expected bucket replication add command, got {:?}", other),
+                other => panic!("expected bucket replication add command, got {other:?}"),
             },
-            other => panic!("expected bucket command, got {:?}", other),
+            other => panic!("expected bucket command, got {other:?}"),
         }
     }
 
@@ -1273,9 +1265,9 @@ mod tests {
                     assert!(!arg.dangerous);
                     assert!(!arg.yes);
                 }
-                other => panic!("expected bucket remove command, got {:?}", other),
+                other => panic!("expected bucket remove command, got {other:?}"),
             },
-            other => panic!("expected bucket command, got {:?}", other),
+            other => panic!("expected bucket command, got {other:?}"),
         }
     }
 
@@ -1344,9 +1336,9 @@ mod tests {
                     assert_eq!(arg.paths, vec!["local/my-bucket/report.csv".to_string()]);
                     assert!(arg.dry_run);
                 }
-                other => panic!("expected object remove command, got {:?}", other),
+                other => panic!("expected object remove command, got {other:?}"),
             },
-            other => panic!("expected object command, got {:?}", other),
+            other => panic!("expected object command, got {other:?}"),
         }
     }
 
@@ -1368,9 +1360,9 @@ mod tests {
                     assert_eq!(arg.path, "local/my-bucket");
                     assert_eq!(arg.arn, "arn:aws:sns:us-east-1:123456789012:alerts");
                 }
-                other => panic!("expected bucket event remove command, got {:?}", other),
+                other => panic!("expected bucket event remove command, got {other:?}"),
             },
-            other => panic!("expected bucket command, got {:?}", other),
+            other => panic!("expected bucket command, got {other:?}"),
         }
     }
 
@@ -1384,7 +1376,7 @@ mod tests {
                 assert_eq!(arg.paths, vec!["local/my-bucket/object.txt".to_string()]);
                 assert!(arg.purge);
             }
-            other => panic!("expected rm command, got {:?}", other),
+            other => panic!("expected rm command, got {other:?}"),
         }
     }
 
@@ -1405,9 +1397,9 @@ mod tests {
                     assert_eq!(arg.paths, vec!["local/my-bucket/object.txt".to_string()]);
                     assert!(arg.purge);
                 }
-                other => panic!("expected object remove command, got {:?}", other),
+                other => panic!("expected object remove command, got {other:?}"),
             },
-            other => panic!("expected object command, got {:?}", other),
+            other => panic!("expected object command, got {other:?}"),
         }
     }
 
@@ -1421,9 +1413,9 @@ mod tests {
                 object::ObjectCommands::Stat(arg) => {
                     assert_eq!(arg.path, "local/my-bucket/report.json");
                 }
-                other => panic!("expected object stat command, got {:?}", other),
+                other => panic!("expected object stat command, got {other:?}"),
             },
-            other => panic!("expected object command, got {:?}", other),
+            other => panic!("expected object command, got {other:?}"),
         }
     }
 
@@ -1484,9 +1476,9 @@ mod tests {
                     assert_eq!(arg.fidelity.legal_hold.as_deref(), Some("on"));
                     assert!(arg.dry_run);
                 }
-                other => panic!("expected object copy command, got {:?}", other),
+                other => panic!("expected object copy command, got {other:?}"),
             },
-            other => panic!("expected object command, got {:?}", other),
+            other => panic!("expected object command, got {other:?}"),
         }
     }
 
@@ -1611,9 +1603,9 @@ mod tests {
                     assert!(arg.dry_run);
                     assert!(arg.continue_on_error);
                 }
-                other => panic!("expected object move command, got {:?}", other),
+                other => panic!("expected object move command, got {other:?}"),
             },
-            other => panic!("expected object command, got {:?}", other),
+            other => panic!("expected object command, got {other:?}"),
         }
     }
 
@@ -1638,9 +1630,9 @@ mod tests {
                     assert_eq!(arg.version_id.as_deref(), Some("v1"));
                     assert_eq!(arg.rewind.as_deref(), Some("1h"));
                 }
-                other => panic!("expected object show command, got {:?}", other),
+                other => panic!("expected object show command, got {other:?}"),
             },
-            other => panic!("expected object command, got {:?}", other),
+            other => panic!("expected object command, got {other:?}"),
         }
 
         let head_cli = Cli::try_parse_from([
@@ -1662,9 +1654,9 @@ mod tests {
                     assert_eq!(arg.bytes, Some(128));
                     assert_eq!(arg.version_id.as_deref(), Some("v2"));
                 }
-                other => panic!("expected object head command, got {:?}", other),
+                other => panic!("expected object head command, got {other:?}"),
             },
-            other => panic!("expected object command, got {:?}", other),
+            other => panic!("expected object command, got {other:?}"),
         }
     }
 
@@ -1693,9 +1685,9 @@ mod tests {
                     assert!(arg.count);
                     assert!(arg.print);
                 }
-                other => panic!("expected object find command, got {:?}", other),
+                other => panic!("expected object find command, got {other:?}"),
             },
-            other => panic!("expected object command, got {:?}", other),
+            other => panic!("expected object command, got {other:?}"),
         }
 
         let tree_cli = Cli::try_parse_from([
@@ -1721,9 +1713,9 @@ mod tests {
                     assert_eq!(arg.pattern.as_deref(), Some("*.json"));
                     assert!(arg.full_path);
                 }
-                other => panic!("expected object tree command, got {:?}", other),
+                other => panic!("expected object tree command, got {other:?}"),
             },
-            other => panic!("expected object command, got {:?}", other),
+            other => panic!("expected object command, got {other:?}"),
         }
     }
 

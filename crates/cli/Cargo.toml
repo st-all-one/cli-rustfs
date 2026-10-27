@@ -36,7 +36,6 @@ quick-xml.workspace = true
 
 # Error handling
 thiserror.workspace = true
-anyhow.workspace = true
 
 # Logging
 tracing.workspace = true
@@ -72,3 +71,6 @@ async-trait.workspace = true
 tempfile.workspace = true
 insta.workspace = true
 jsonschema.workspace = true
+
+[lints]
+workspace = true

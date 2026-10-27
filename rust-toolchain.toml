@@ -1,0 +1,6 @@
+# rc toolchain — Rust 1.99 (minor channel resolves the latest available patch).
+# MSRV is a contract: `rust-version` in Cargo.toml and `msrv` in clippy.toml must match.
+[toolchain]
+channel = "1.99"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

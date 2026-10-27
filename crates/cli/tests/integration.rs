@@ -1,3 +1,14 @@
+#![allow(
+    clippy::expect_used,
+    clippy::expect_fun_call,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    let_underscore_drop,
+    clippy::large_stack_arrays,
+    reason = "test fixtures and assertions fail fast with actionable diagnostics"
+)]
+
 //! Integration tests for rc CLI
 //!
 //! These tests require a running S3-compatible server.
@@ -223,7 +234,7 @@ fn uuid_suffix() -> String {
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
-    format!("{:x}", duration.as_nanos() % 0xFFFFFFFF)
+    format!("{:x}", duration.as_nanos() % 0xffffffff)
 }
 
 /// Cleanup helper: delete bucket and all objects
@@ -1816,7 +1827,7 @@ mod multipart_operations {
 
         {
             let mut file = std::fs::File::create(temp_file.path()).expect("Failed to create file");
-            let pattern: Vec<u8> = vec![0xAB; 4096];
+            let pattern: Vec<u8> = vec![0xab; 4096];
             for _ in 0..(file_size / 4096) {
                 file.write_all(&pattern).expect("Failed to write");
             }
@@ -1875,12 +1886,12 @@ mod multipart_operations {
 
         {
             let mut file = std::fs::File::create(temp_file.path()).expect("Failed to create file");
-            let pattern: Vec<u8> = vec![0xCD; 4096];
+            let pattern: Vec<u8> = vec![0xcd; 4096];
             for _ in 0..(file_size / 4096) {
                 file.write_all(&pattern).expect("Failed to write");
             }
             // Write remaining bytes
-            file.write_all(&[0xCD]).expect("Failed to write last byte");
+            file.write_all(&[0xcd]).expect("Failed to write last byte");
         }
 
         // Upload

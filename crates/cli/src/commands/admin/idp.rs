@@ -350,7 +350,7 @@ enum ClientSecretSource {
     File(PathBuf),
 }
 
-pub async fn execute(command: IdpCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(command: IdpCommands, formatter: &Formatter) -> ExitCode {
     match command {
         IdpCommands::Openid(command) => match command {
             OpenidCommands::List(args) => execute_list(args, formatter).await,
@@ -1080,8 +1080,8 @@ fn print_list(list: &OidcProviderList, formatter: &Formatter) {
                 "disabled"
             },
             match provider.source {
-                rc_core::admin::OidcProviderSource::Env => "env",
-                rc_core::admin::OidcProviderSource::Persisted => "persisted",
+                OidcProviderSource::Env => "env",
+                OidcProviderSource::Persisted => "persisted",
             }
         ));
     }

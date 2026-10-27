@@ -578,7 +578,7 @@ pub trait ObjectStore: Send + Sync {
         bucket: &str,
         options: MultipartUploadListOptions,
     ) -> Result<MultipartUploadListResult> {
-        let _ = (bucket, options);
+        let _unsupported_inputs = (bucket, options);
         Err(Error::UnsupportedFeature(
             "Multipart upload listing is not supported by this object store".to_string(),
         ))
@@ -988,30 +988,17 @@ pub trait ObjectStore: Send + Sync {
     }
 
     /// Get object tags
-    async fn get_object_tags(
-        &self,
-        path: &RemotePath,
-    ) -> Result<std::collections::HashMap<String, String>>;
+    async fn get_object_tags(&self, path: &RemotePath) -> Result<HashMap<String, String>>;
 
     /// Get bucket tags
-    async fn get_bucket_tags(
-        &self,
-        bucket: &str,
-    ) -> Result<std::collections::HashMap<String, String>>;
+    async fn get_bucket_tags(&self, bucket: &str) -> Result<HashMap<String, String>>;
 
     /// Set object tags
-    async fn set_object_tags(
-        &self,
-        path: &RemotePath,
-        tags: std::collections::HashMap<String, String>,
-    ) -> Result<()>;
+    async fn set_object_tags(&self, path: &RemotePath, tags: HashMap<String, String>)
+    -> Result<()>;
 
     /// Set bucket tags
-    async fn set_bucket_tags(
-        &self,
-        bucket: &str,
-        tags: std::collections::HashMap<String, String>,
-    ) -> Result<()>;
+    async fn set_bucket_tags(&self, bucket: &str, tags: HashMap<String, String>) -> Result<()>;
 
     /// Delete object tags
     async fn delete_object_tags(&self, path: &RemotePath) -> Result<()>;
@@ -1136,7 +1123,7 @@ mod tests {
             .validate()
             .expect_err("Object Lock without versioning must be rejected");
 
-        assert!(matches!(error, crate::Error::InvalidPath(_)));
+        assert!(matches!(error, Error::InvalidPath(_)));
     }
 
     #[test]
@@ -1165,7 +1152,7 @@ mod tests {
         let error = ObjectReadOptions::for_version(Some(String::new()))
             .expect_err("empty version IDs must be rejected");
 
-        assert!(matches!(error, crate::Error::InvalidPath(_)));
+        assert!(matches!(error, Error::InvalidPath(_)));
     }
 
     #[test]

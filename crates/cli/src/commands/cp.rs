@@ -813,7 +813,7 @@ impl PlannedCopyProgress {
         let mut positions = self
             .positions
             .lock()
-            .expect("planned copy progress lock should not be poisoned");
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         positions.insert(key.clone(), bytes);
         let aggregate = positions.values().copied().fold(0_u64, u64::saturating_add);
         if let Some(bar) = &self.bar {
@@ -830,7 +830,10 @@ impl PlannedCopyProgress {
 
 type SharedPlannedCopyProgress = Arc<PlannedCopyProgress>;
 
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "transfer pipeline mirrors the S3 request fields"
+)]
 async fn execute_transfer_plan(
     args: &CpArgs,
     sources: Vec<ParsedPath>,
@@ -1003,7 +1006,7 @@ async fn execute_transfer_plan(
         })
         .await;
     signal_task.abort();
-    let _ = signal_task.await;
+    drop(signal_task.await);
     copy_progress.finish();
 
     let copy_details = copy_details.lock().await;
@@ -1257,7 +1260,10 @@ struct PlannedRemoteCopyResult {
     object: ObjectInfo,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "transfer pipeline mirrors the S3 request fields"
+)]
 async fn perform_planned_remote_copy(
     source_client: &S3Client,
     target_client: &S3Client,
@@ -1352,7 +1358,10 @@ async fn perform_planned_remote_copy(
     })
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "transfer pipeline mirrors the S3 request fields"
+)]
 async fn perform_cross_alias_remote_copy(
     source_client: &S3Client,
     target_client: &S3Client,
@@ -1430,7 +1439,7 @@ async fn perform_cross_alias_remote_copy(
         let options = piped_copy_write_options(args, &current, encryption)?;
         let object = target_client
             .put_object_from_path_with_options(target, &staging, &options, |copied| {
-                on_progress(copied)
+                on_progress(copied);
             })
             .await?;
         let bytes_copied = object
@@ -1851,7 +1860,10 @@ fn is_container_target(raw: &str, target: &ParsedPath) -> bool {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "transfer pipeline mirrors the S3 request fields"
+)]
 async fn build_transfer_candidates(
     sources: &[ParsedPath],
     target: &ParsedPath,
@@ -1949,7 +1961,7 @@ async fn skip_existing_remote_targets(
             .await
         {
             Ok(_) => skipped.push(candidate),
-            Err(Error::NotFound(_)) | Err(Error::VersionNotFound { .. }) => {
+            Err(Error::NotFound(_) | Error::VersionNotFound { .. }) => {
                 retained.push(candidate);
             }
             Err(error) => return Err(error),
@@ -1961,7 +1973,10 @@ async fn skip_existing_remote_targets(
     Ok(skipped)
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "transfer pipeline mirrors the S3 request fields"
+)]
 fn build_local_candidates(
     source: &Path,
     target: &ParsedPath,
@@ -2101,7 +2116,10 @@ fn collect_local_files(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "transfer pipeline mirrors the S3 request fields"
+)]
 async fn build_remote_candidates(
     source: &RemotePath,
     target: &ParsedPath,
@@ -2136,8 +2154,7 @@ async fn build_remote_candidates(
             && remote_copy_scopes_overlap(&listing_source, target)
         {
             return Err(Error::Conflict(format!(
-                "Recursive source '{}' overlaps destination '{}'",
-                listing_source, target
+                "Recursive source '{listing_source}' overlaps destination '{target}'"
             )));
         }
 
@@ -2526,7 +2543,7 @@ fn update_download_progress(
 
 fn print_upload_success(
     formatter: &Formatter,
-    info: &rc_core::ObjectInfo,
+    info: &ObjectInfo,
     src_display: &str,
     dst_display: &str,
 ) {
@@ -2552,14 +2569,14 @@ async fn upload_file(
     let dst_key = if dst.key.is_empty() || dst.key.ends_with('/') {
         // If destination is a directory, use source filename
         let filename = src.file_name().unwrap_or_default().to_string_lossy();
-        format!("{}{}", dst.key, filename)
+        format!("{}{filename}", dst.key)
     } else {
         dst.key.clone()
     };
 
     let target = RemotePath::new(&dst.alias, &dst.bucket, &dst_key);
     let src_display = src.display().to_string();
-    let dst_display = format!("{}/{}/{}", dst.alias, dst.bucket, dst_key);
+    let dst_display = format!("{}/{}/{dst_key}", dst.alias, dst.bucket);
 
     // Get file size for progress bar decision
     let file_size = match std::fs::metadata(src) {
@@ -2675,10 +2692,11 @@ async fn upload_directory(
     let mut error_count = 0;
 
     // Walk directory
-    fn walk_dir(dir: &Path, base: &Path) -> std::io::Result<Vec<(std::path::PathBuf, String)>> {
+    fn walk_dir(dir: &Path, base: &Path) -> std::io::Result<Vec<(PathBuf, String)>> {
         let mut files = Vec::new();
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
+        let mut entries = fs::read_dir(dir)?.collect::<std::io::Result<Vec<_>>>()?;
+        entries.sort_by_key(std::fs::DirEntry::file_name);
+        for entry in entries {
             let path = entry.path();
             if path.is_file() {
                 let relative = path.strip_prefix(base).unwrap_or(&path);
@@ -3209,7 +3227,7 @@ async fn copy_s3_to_s3_prepared(
         _ = transfer_cancellation.cancelled() => {
             // Do not drop an in-flight request. Multipart copy observes its own token and performs
             // cleanup; CopyObject is allowed to settle before the command reports interruption.
-            let _ = copy.await;
+            drop(copy.await);
             Err(Error::Interrupted("Copy interrupted".to_string()))
         }
         result = &mut copy => {
@@ -3221,7 +3239,7 @@ async fn copy_s3_to_s3_prepared(
         }
     };
     signal_task.abort();
-    let _ = signal_task.await;
+    drop(signal_task.await);
 
     match result {
         Ok(result) => {
@@ -3261,7 +3279,7 @@ async fn copy_s3_to_s3_prepared(
     }
 }
 
-fn print_copy_json(formatter: &Formatter, info: &rc_core::ObjectInfo, source: &str, target: &str) {
+fn print_copy_json(formatter: &Formatter, info: &ObjectInfo, source: &str, target: &str) {
     if info.version_id.is_some() || info.source_version_id.is_some() {
         formatter.json(&V3SuccessEnvelope::versioned_objects(VersionCopyData {
             operation: "copy",
@@ -3962,7 +3980,7 @@ mod tests {
 
     #[test]
     fn multipart_options_require_and_preserve_planned_source_identity() {
-        let mut source = rc_core::ObjectInfo::file("large.bin", (MAX_SINGLE_COPY_SIZE + 1) as i64);
+        let mut source = ObjectInfo::file("large.bin", (MAX_SINGLE_COPY_SIZE + 1) as i64);
         source.etag = Some("planned-etag".to_string());
         source.version_id = Some("source-version".to_string());
         source.content_type = Some("application/octet-stream".to_string());
@@ -4055,7 +4073,7 @@ mod tests {
         let error = parse_destination_encryption(
             &[String::from("./local.txt")],
             &[],
-            &ParsedPath::Local(std::path::PathBuf::from("./local.txt")),
+            &ParsedPath::Local(PathBuf::from("./local.txt")),
         )
         .expect_err("local target should be rejected");
 

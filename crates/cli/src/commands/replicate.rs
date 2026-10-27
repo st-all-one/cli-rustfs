@@ -608,7 +608,7 @@ struct ReplicationDiffStandardError {
 // ==================== execute ====================
 
 /// Execute the replicate command
-pub async fn execute(args: ReplicateArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: ReplicateArgs, output_config: OutputConfig) -> ExitCode {
     match args.command {
         ReplicateCommands::Add(args) => execute_add(args, output_config).await,
         ReplicateCommands::Update(args) => execute_update(args, output_config).await,
@@ -1037,8 +1037,7 @@ async fn execute_add(args: AddArgs, output_config: OutputConfig) -> ExitCode {
                 });
             } else {
                 formatter.success(&format!(
-                    "Replication rule '{}' added for '{}/{}'",
-                    rule_id, source_alias, source_bucket
+                    "Replication rule '{rule_id}' added for '{source_alias}/{source_bucket}'"
                 ));
             }
             ExitCode::Success
@@ -1101,12 +1100,11 @@ async fn execute_update(args: UpdateArgs, output_config: OutputConfig) -> ExitCo
         }
     };
 
-    let rule_index = match config.rules.iter().position(|rule| rule.id == args.id) {
-        Some(index) => index,
-        None => {
-            formatter.error(&format!("Rule '{}' not found", args.id));
-            return ExitCode::NotFound;
-        }
+    let rule_index = if let Some(index) = config.rules.iter().position(|rule| rule.id == args.id) {
+        index
+    } else {
+        formatter.error(&format!("Rule '{}' not found", args.id));
+        return ExitCode::NotFound;
     };
 
     let current_target_arn = config.rules[rule_index].destination.bucket_arn.clone();
@@ -1118,19 +1116,20 @@ async fn execute_update(args: UpdateArgs, output_config: OutputConfig) -> ExitCo
         };
 
         let mut target = match admin_client.list_remote_targets(&source_bucket).await {
-            Ok(targets) => match targets
-                .into_iter()
-                .find(|target| target.arn == current_target_arn)
-            {
-                Some(target) => target,
-                None => {
+            Ok(targets) => {
+                if let Some(target) = targets
+                    .into_iter()
+                    .find(|target| target.arn == current_target_arn)
+                {
+                    target
+                } else {
                     formatter.error(&format!(
-                        "Remote target '{}' not found for rule '{}'",
-                        current_target_arn, args.id
+                        "Remote target '{current_target_arn}' not found for rule '{}'",
+                        args.id
                     ));
                     return ExitCode::NotFound;
                 }
-            },
+            }
             Err(error) => {
                 formatter.error(&format!("Failed to list remote targets: {error}"));
                 return ExitCode::GeneralError;
@@ -1194,8 +1193,7 @@ async fn execute_update(args: UpdateArgs, output_config: OutputConfig) -> ExitCo
                 });
             } else {
                 formatter.success(&format!(
-                    "Replication rule '{}' updated for '{}/{}'",
-                    rule_id, source_alias, source_bucket
+                    "Replication rule '{rule_id}' updated for '{source_alias}/{source_bucket}'"
                 ));
             }
             ExitCode::Success
@@ -1738,17 +1736,16 @@ async fn execute_remove(args: RemoveArgs, output_config: OutputConfig) -> ExitCo
         }
     };
 
-    let removed_rule = match config
+    let removed_rule = if let Some(rule) = config
         .rules
         .iter()
         .position(|rule| rule.id == rule_id)
         .map(|index| config.rules.remove(index))
     {
-        Some(rule) => rule,
-        None => {
-            formatter.error(&format!("Rule '{}' not found", rule_id));
-            return ExitCode::NotFound;
-        }
+        rule
+    } else {
+        formatter.error(&format!("Rule '{rule_id}' not found"));
+        return ExitCode::NotFound;
     };
 
     let should_remove_target = !removed_rule.destination.bucket_arn.is_empty()
@@ -1794,7 +1791,7 @@ async fn execute_remove(args: RemoveArgs, output_config: OutputConfig) -> ExitCo
             action: "removed".to_string(),
         });
     } else {
-        formatter.success(&format!("Replication rule '{}' removed.", rule_id));
+        formatter.success(&format!("Replication rule '{rule_id}' removed."));
     }
     ExitCode::Success
 }

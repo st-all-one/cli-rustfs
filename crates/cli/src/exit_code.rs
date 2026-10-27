@@ -136,11 +136,11 @@ mod tests {
     #[test]
     fn test_exit_code_display() {
         let display = format!("{}", ExitCode::Success);
-        assert!(display.contains("0"));
+        assert!(display.contains('0'));
         assert!(display.contains("successfully"));
 
         let display = format!("{}", ExitCode::NotFound);
-        assert!(display.contains("5"));
+        assert!(display.contains('5'));
         assert!(display.contains("not found"));
     }
 }

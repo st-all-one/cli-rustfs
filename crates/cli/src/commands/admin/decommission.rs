@@ -84,7 +84,7 @@ struct DecommissionOperationOutput {
 }
 
 /// Execute a decommission subcommand
-pub async fn execute(cmd: DecommissionCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(cmd: DecommissionCommands, formatter: &Formatter) -> ExitCode {
     match cmd {
         DecommissionCommands::Start(args) => execute_start(args, formatter).await,
         DecommissionCommands::Status(args) => execute_status(args, formatter).await,

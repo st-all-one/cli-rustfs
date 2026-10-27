@@ -1,7 +1,49 @@
-# RUSTSEC-2023-0071 affects network-observable RSA private-key operations.
-# Diagnostic archive RSA-OAEP decryption is performed only on the operator's
-# local machine with an ephemeral or explicitly local private key; rc exposes
-# no remote decryption oracle. The advisory currently has no patched release
-# and explicitly permits this local-only threat model as its workaround.
+# cargo-deny — supply-chain policy (advisories, licenses, bans, sources).
+#
+# CI fails on vulnerabilities, a license outside the allow-list, a version
+# wildcard, or a source other than crates.io. Local: `make deny`.
+
 [advisories]
-ignore = ["RUSTSEC-2023-0071"]
+version = 2
+yanked = "deny"
+ignore = [
+    # RUSTSEC-2023-0071: local-only diagnostic archive RSA-OAEP decryption.
+    # The operator supplies an ephemeral/local private key; rc exposes no
+    # remote decryption oracle. No patched release exists yet.
+    "RUSTSEC-2023-0071",
+    # RUSTSEC-2026-0387: crypto-bigint constant-time timing variability via
+    # aws-sigv4/p256. No patched upstream release is available for this graph;
+    # rc is a local CLI and the advisory requires an attacker able to observe
+    # fine-grained timing on the same machine. Re-evaluate on the next AWS SDK bump.
+    "RUSTSEC-2026-0387",
+]
+
+[licenses]
+version = 2
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+    "CC0-1.0",
+    "MPL-2.0",
+    "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Internal workspace path dependencies are not supply-chain wildcards.
+allow-wildcard-paths = true
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

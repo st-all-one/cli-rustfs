@@ -20,7 +20,7 @@ use crate::exit_code::ExitCode;
 use crate::output::{Formatter, OutputConfig};
 
 #[derive(Args, Debug)]
-pub struct AnonymousArgs {
+pub(super) struct AnonymousArgs {
     #[command(subcommand)]
     pub command: AnonymousCommands,
 }
@@ -187,7 +187,7 @@ impl PermissionFlags {
     }
 }
 
-pub async fn execute(args: AnonymousArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: AnonymousArgs, output_config: OutputConfig) -> ExitCode {
     match args.command {
         AnonymousCommands::Set(args) => execute_set(args, output_config).await,
         AnonymousCommands::SetJson(args) => execute_set_json(args, output_config).await,
@@ -253,9 +253,8 @@ async fn execute_set(args: SetArgs, output_config: OutputConfig) -> ExitCode {
                 });
             } else {
                 formatter.println(&format!(
-                    "Set anonymous permission for '{}' to '{}'",
-                    target.path_with_bucket_prefix(),
-                    permission
+                    "Set anonymous permission for '{}' to '{permission}'",
+                    target.path_with_bucket_prefix()
                 ));
             }
             ExitCode::Success
@@ -375,9 +374,8 @@ async fn execute_get(args: AnonymousPathArg, output_config: OutputConfig) -> Exi
         });
     } else {
         formatter.println(&format!(
-            "Anonymous access permission for '{}' is '{}'",
-            target.path_with_bucket_prefix(),
-            permission
+            "Anonymous access permission for '{}' is '{permission}'",
+            target.path_with_bucket_prefix()
         ));
     }
 
@@ -543,12 +541,11 @@ async fn execute_links(args: LinksArgs, output_config: OutputConfig) -> ExitCode
         }
     };
 
-    let rules = match parse_access_rules(&policy, &target.bucket) {
-        Ok(rules) => rules,
-        Err(_) => {
-            formatter.println("Policy does not contain recognizable anonymous rules.");
-            return ExitCode::Success;
-        }
+    let rules = if let Ok(rules) = parse_access_rules(&policy, &target.bucket) {
+        rules
+    } else {
+        formatter.println("Policy does not contain recognizable anonymous rules.");
+        return ExitCode::Success;
     };
 
     let mut urls = Vec::new();
@@ -577,8 +574,7 @@ async fn execute_links(args: LinksArgs, output_config: OutputConfig) -> ExitCode
             Ok(keys) => keys,
             Err(error) => {
                 formatter.error(&format!(
-                    "Failed to list objects for prefix '{}': {error}",
-                    list_prefix
+                    "Failed to list objects for prefix '{list_prefix}': {error}"
                 ));
                 return exit_code_from_error(&error);
             }
@@ -656,7 +652,7 @@ fn parse_anonymous_path(path: &str) -> Result<AccessTarget, String> {
 
 fn build_policy(level: &AccessLevel, bucket: &str, prefix: &str) -> String {
     let object_resource = build_object_resource(bucket, prefix);
-    let bucket_resource = format!("arn:aws:s3:::{}", bucket);
+    let bucket_resource = format!("arn:aws:s3:::{bucket}");
     let mut statements = Vec::new();
     let mut sid = 1u8;
 
@@ -721,7 +717,7 @@ fn build_object_resource(bucket: &str, prefix: &str) -> String {
     if prefix.is_empty() {
         format!("arn:aws:s3:::{bucket}/*")
     } else {
-        format!("arn:aws:s3:::{}/{}/*", bucket, prefix.trim_end_matches('/'))
+        format!("arn:aws:s3:::{bucket}/{}/*", prefix.trim_end_matches('/'))
     }
 }
 
@@ -984,7 +980,7 @@ fn parse_string_or_array(value: Option<&serde_json::Value>) -> Vec<String> {
     };
 
     match value {
-        serde_json::Value::String(value) => vec![value.to_string()],
+        serde_json::Value::String(value) => vec![value.clone()],
         serde_json::Value::Array(values) => values
             .iter()
             .filter_map(|v| v.as_str().map(ToString::to_string))
@@ -1028,12 +1024,11 @@ async fn setup_anonymous_client(
         }
     };
 
-    let alias = match alias_manager.get(alias_name) {
-        Ok(alias) => alias,
-        Err(_) => {
-            formatter.error(&format!("Alias '{alias_name}' not found"));
-            return Err(ExitCode::NotFound);
-        }
+    let alias = if let Ok(alias) = alias_manager.get(alias_name) {
+        alias
+    } else {
+        formatter.error(&format!("Alias '{alias_name}' not found"));
+        return Err(ExitCode::NotFound);
     };
 
     let client = match S3Client::new(alias.clone()).await {

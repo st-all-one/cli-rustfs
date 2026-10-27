@@ -21,7 +21,7 @@ pub struct CapabilitiesArgs {
 }
 
 /// Execute runtime capability discovery.
-pub async fn execute(args: CapabilitiesArgs, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(args: CapabilitiesArgs, formatter: &Formatter) -> ExitCode {
     let client = match get_admin_client(&args.alias, formatter) {
         Ok(client) => client,
         Err(code) => return code,
@@ -75,8 +75,8 @@ fn report_lines(report: &CapabilityReport, formatter: &Formatter) -> Vec<String>
         let name = formatter.sanitize_text(&capability.name);
         let reason = formatter.sanitize_text(capability.reason.as_deref().unwrap_or("-"));
         lines.push(format!(
-            "{:<34} {:<18} {}",
-            name, capability.availability, reason
+            "{name:<34} {:<18} {reason}",
+            capability.availability
         ));
     }
 

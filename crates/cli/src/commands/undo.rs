@@ -125,7 +125,7 @@ impl UndoStore for S3Client {
 }
 
 /// Execute the undo command.
-pub async fn execute(args: UndoArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: UndoArgs, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
     if let Err(error) = validate_args(&args) {
         return fail(&formatter, ExitCode::UsageError, &error);
@@ -220,8 +220,7 @@ async fn run_undo<S: UndoStore + 'static>(
     let (plan, mut results) = build_plan(path, history, args);
     if plan.items.is_empty() && results.is_empty() {
         return Err(Error::NotFound(format!(
-            "No object version history found for {}",
-            path
+            "No object version history found for {path}"
         )));
     }
     let planned = plan.items.len();
@@ -332,8 +331,8 @@ async fn execute_plan_item<S: UndoStore>(
     };
     if current != plan.expected_latest_version_id {
         let error = Error::Conflict(format!(
-            "Object changed after undo planning; expected current version '{}', found '{}'",
-            plan.expected_latest_version_id, current
+            "Object changed after undo planning; expected current version '{}', found '{current}'",
+            plan.expected_latest_version_id
         ));
         return failed_result(plan, &error);
     }
@@ -394,8 +393,7 @@ async fn execute_plan_item<S: UndoStore>(
                 },
                 Ok(observed) => {
                     let error = Error::Conflict(format!(
-                        "Undo mutation completed but the current version changed; expected '{}', found '{}'",
-                        expected_current, observed
+                        "Undo mutation completed but the current version changed; expected '{expected_current}', found '{observed}'"
                     ));
                     failed_result(plan, &error)
                 }
@@ -537,7 +535,7 @@ fn report_exit_code(report: &UndoCommandData) -> ExitCode {
     report
         .results
         .iter()
-        .filter_map(|result| match &result.outcome {
+        .find_map(|result| match &result.outcome {
             UndoOutcome::Failed { error_type, .. } => Some(match error_type.as_str() {
                 "usage_error" => ExitCode::UsageError,
                 "network_error" => ExitCode::NetworkError,
@@ -550,7 +548,6 @@ fn report_exit_code(report: &UndoCommandData) -> ExitCode {
             }),
             _ => None,
         })
-        .next()
         .unwrap_or(ExitCode::Success)
 }
 
@@ -560,12 +557,12 @@ fn format_dry_run(plan: &UndoPlanItem) -> String {
             marker_version_id,
             revealed_version_id,
         } => format!(
-            "Would remove delete marker '{}' for {} (expected current '{}'; reveals '{}')",
-            marker_version_id, plan.key, plan.expected_latest_version_id, revealed_version_id
+            "Would remove delete marker '{marker_version_id}' for {} (expected current '{}'; reveals '{revealed_version_id}')",
+            plan.key, plan.expected_latest_version_id
         ),
         UndoAction::RestoreVersion { source_version_id } => format!(
-            "Would restore {} from version '{}' (expected current '{}')",
-            plan.key, source_version_id, plan.expected_latest_version_id
+            "Would restore {} from version '{source_version_id}' (expected current '{}')",
+            plan.key, plan.expected_latest_version_id
         ),
     }
 }

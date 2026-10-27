@@ -232,7 +232,7 @@ impl From<&DiskInfo> for DiskOutput {
 }
 
 /// Execute an info subcommand
-pub async fn execute(cmd: InfoCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(cmd: InfoCommands, formatter: &Formatter) -> ExitCode {
     match cmd {
         InfoCommands::Cluster(args) => execute_cluster(args, formatter).await,
         InfoCommands::Server(args) => execute_server(args, formatter).await,
@@ -367,10 +367,8 @@ fn print_storage_info(info: &StorageInfo, include_metrics: bool, formatter: &For
     formatter.println("");
     formatter.println(&format!("Backend:        {}", info.backend.kind));
     formatter.println(&format!(
-        "Disks:          {} ({} online, {} offline)",
-        info.disks.len(),
-        online,
-        offline
+        "Disks:          {} ({online} online, {offline} offline)",
+        info.disks.len()
     ));
     formatter.println(&format!(
         "Capacity:       {} used / {} total",
@@ -459,7 +457,7 @@ async fn execute_cluster(args: ClusterArgs, formatter: &Formatter) -> ExitCode {
                         .unwrap_or_else(|| "us-east-1".to_string()),
                     rc_version: env!("CARGO_PKG_VERSION").to_string(),
                     rustfs_version: cluster_rustfs_version(&info),
-                    servers: info.servers.as_ref().map(|s| s.len()).unwrap_or(0),
+                    servers: info.servers.as_ref().map(Vec::len).unwrap_or(0),
                     online_disks: info.online_disks(),
                     offline_disks: info.offline_disks(),
                     total_capacity: info.total_capacity(),
@@ -488,7 +486,7 @@ fn print_cluster_info(info: &ClusterInfo, formatter: &Formatter) {
     formatter.println(&format!(
         "{}  {}",
         formatter.style_name("Cluster Information"),
-        formatter.style_date(&format!("({})", mode))
+        formatter.style_date(&format!("({mode})"))
     ));
     formatter.println("");
 
@@ -497,7 +495,7 @@ fn print_cluster_info(info: &ClusterInfo, formatter: &Formatter) {
         "  Deployment ID: {}",
         formatter.style_name(deployment_id)
     ));
-    formatter.println(&format!("  Region:        {}", region));
+    formatter.println(&format!("  Region:        {region}"));
     formatter.println(&format!("  RC Version:    {}", env!("CARGO_PKG_VERSION")));
     formatter.println(&format!(
         "  RustFS Version: {}",
@@ -505,8 +503,8 @@ fn print_cluster_info(info: &ClusterInfo, formatter: &Formatter) {
     ));
 
     // Server info
-    let server_count = info.servers.as_ref().map(|s| s.len()).unwrap_or(0);
-    formatter.println(&format!("  Servers:       {}", server_count));
+    let server_count = info.servers.as_ref().map(Vec::len).unwrap_or(0);
+    formatter.println(&format!("  Servers:       {server_count}"));
 
     // Disk info
     let online = info.online_disks();
@@ -514,15 +512,13 @@ fn print_cluster_info(info: &ClusterInfo, formatter: &Formatter) {
     let total = online + offline;
     if offline > 0 {
         formatter.println(&format!(
-            "  Disks:         {} ({} online, {} offline)",
-            total,
+            "  Disks:         {total} ({} online, {} offline)",
             formatter.style_size(&online.to_string()),
             formatter.style_date(&offline.to_string())
         ));
     } else {
         formatter.println(&format!(
-            "  Disks:         {} ({} online)",
-            total,
+            "  Disks:         {total} ({} online)",
             formatter.style_size(&online.to_string())
         ));
     }
@@ -533,10 +529,9 @@ fn print_cluster_info(info: &ClusterInfo, formatter: &Formatter) {
     if total_bytes > 0 {
         let usage_pct = (used_bytes as f64 / total_bytes as f64 * 100.0) as u8;
         formatter.println(&format!(
-            "  Storage:       {} / {} ({}%)",
+            "  Storage:       {} / {} ({usage_pct}%)",
             format_bytes(used_bytes),
-            format_bytes(total_bytes),
-            usage_pct
+            format_bytes(total_bytes)
         ));
     }
 
@@ -562,7 +557,7 @@ fn print_cluster_info(info: &ClusterInfo, formatter: &Formatter) {
             formatter.style_name(&backend.backend_type.to_string())
         ));
         if let Some(parity) = backend.standard_sc_parity {
-            formatter.println(&format!("  EC Parity:     {}", parity));
+            formatter.println(&format!("  EC Parity:     {parity}"));
         }
     }
 
@@ -592,8 +587,7 @@ fn print_cluster_node_details(servers: &[ServerInfo], formatter: &Formatter) {
         let total_disks = server.disks.len();
 
         formatter.println(&format!(
-            "  {} {}",
-            state_icon,
+            "  {state_icon} {}",
             formatter.style_name(endpoint)
         ));
         formatter.println(&format!("     Uptime:  {}", format_duration(server.uptime)));
@@ -605,10 +599,7 @@ fn print_cluster_node_details(servers: &[ServerInfo], formatter: &Formatter) {
                 server.network.len()
             ));
         }
-        formatter.println(&format!(
-            "     Drives:  {}/{} OK",
-            online_disks, total_disks
-        ));
+        formatter.println(&format!("     Drives:  {online_disks}/{total_disks} OK"));
         if server.pool_number > 0 {
             formatter.println(&format!("     Pool:    {}", server.pool_number));
         }
@@ -635,11 +626,8 @@ fn print_cluster_disk_details(servers: &[ServerInfo], formatter: &Formatter) {
         let endpoint = value_or_unknown(&disk.endpoint);
 
         formatter.println(&format!(
-            "  {} {} [{}] {}",
-            state_icon,
-            formatter.style_name(path),
-            state,
-            endpoint
+            "  {state_icon} {} [{state}] {endpoint}",
+            formatter.style_name(path)
         ));
         if disk.total_space > 0 {
             formatter.println(&format!("     Capacity: {}", disk_capacity_summary(disk)));
@@ -686,10 +674,9 @@ async fn execute_server(args: ServerArgs, formatter: &Formatter) -> ExitCode {
                     let version = formatter.style_date(&server.version);
                     let uptime = format_duration(server.uptime);
 
-                    formatter.println(&format!("{} {} [{}]", state_icon, endpoint, version));
+                    formatter.println(&format!("{state_icon} {endpoint} [{version}]"));
                     formatter.println(&format!(
-                        "    Uptime: {} | Disks: {}",
-                        uptime,
+                        "    Uptime: {uptime} | Disks: {}",
                         server.disks.len()
                     ));
                 }
@@ -759,19 +746,15 @@ async fn execute_disk(args: DiskArgs, formatter: &Formatter) -> ExitCode {
                         disk.pool_index, disk.set_index, disk.disk_index
                     );
 
-                    formatter.println(&format!(
-                        "{} {}{} ({})",
-                        state_icon, path, healing_badge, location
-                    ));
+                    formatter.println(&format!("{state_icon} {path}{healing_badge} ({location})"));
 
                     if disk.total_space > 0 {
                         let usage_pct =
                             (disk.used_space as f64 / disk.total_space as f64 * 100.0) as u8;
                         formatter.println(&format!(
-                            "    {} / {} ({}%)",
+                            "    {} / {} ({usage_pct}%)",
                             format_bytes(disk.used_space),
-                            format_bytes(disk.total_space),
-                            usage_pct
+                            format_bytes(disk.total_space)
                         ));
                     }
                 }
@@ -847,10 +830,9 @@ fn disk_capacity_summary(disk: &DiskInfo) -> String {
 
     let usage_pct = (disk.used_space as f64 / disk.total_space as f64 * 100.0) as u8;
     format!(
-        "{} / {} ({}%, available: {})",
+        "{} / {} ({usage_pct}%, available: {})",
         format_bytes(disk.used_space),
         format_bytes(disk.total_space),
-        usage_pct,
         format_bytes(disk.available_space)
     )
 }
@@ -874,7 +856,7 @@ fn format_bytes(bytes: u64) -> String {
     } else if bytes >= KB {
         format!("{:.2} KiB", bytes as f64 / KB as f64)
     } else {
-        format!("{} B", bytes)
+        format!("{bytes} B")
     }
 }
 
@@ -885,11 +867,11 @@ fn format_duration(seconds: u64) -> String {
     let minutes = (seconds % 3600) / 60;
 
     if days > 0 {
-        format!("{}d {}h {}m", days, hours, minutes)
+        format!("{days}d {hours}h {minutes}m")
     } else if hours > 0 {
-        format!("{}h {}m", hours, minutes)
+        format!("{hours}h {minutes}m")
     } else {
-        format!("{}m", minutes)
+        format!("{minutes}m")
     }
 }
 

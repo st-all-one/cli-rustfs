@@ -211,7 +211,7 @@ struct RuleOperationOutput {
 }
 
 /// Execute a rule subcommand
-pub async fn execute(cmd: RuleCommands, output_config: OutputConfig) -> ExitCode {
+pub(crate) async fn execute(cmd: RuleCommands, output_config: OutputConfig) -> ExitCode {
     match cmd {
         RuleCommands::Add(args) => execute_add(args, output_config).await,
         RuleCommands::Edit(args) => execute_edit(args, output_config).await,
@@ -256,8 +256,10 @@ async fn execute_add(args: AddRuleArgs, output_config: OutputConfig) -> ExitCode
         }
     };
 
-    // Generate rule ID
-    let rule_id = generate_rule_id();
+    // Generate a stable rule ID from the target, existing state and the
+    // requested rule body. Using the wall clock here made add output and the
+    // persisted lifecycle document non-reproducible.
+    let rule_id = generate_rule_id(&format!("{bucket}:{}:{args:?}", rules.len()));
 
     let status = if args.disable {
         LifecycleRuleStatus::Disabled
@@ -391,12 +393,11 @@ async fn execute_edit(args: EditRuleArgs, output_config: OutputConfig) -> ExitCo
         }
     };
 
-    let rule = match rules.iter_mut().find(|r| r.id == args.id) {
-        Some(rule) => rule,
-        None => {
-            formatter.error(&format!("Rule '{}' not found", args.id));
-            return ExitCode::NotFound;
-        }
+    let rule = if let Some(rule) = rules.iter_mut().find(|r| r.id == args.id) {
+        rule
+    } else {
+        formatter.error(&format!("Rule '{}' not found", args.id));
+        return ExitCode::NotFound;
     };
 
     // Update status if requested
@@ -778,7 +779,7 @@ fn validate_expired_delete_marker_inputs(
     cleanup_enabled: bool,
     has_current_expiration: bool,
     has_tags: bool,
-) -> std::result::Result<(), String> {
+) -> Result<(), String> {
     if !cleanup_enabled {
         return Ok(());
     }
@@ -796,7 +797,7 @@ fn validate_expired_delete_marker_inputs(
     Ok(())
 }
 
-fn validate_expired_delete_marker_rule(rule: &LifecycleRule) -> std::result::Result<(), String> {
+fn validate_expired_delete_marker_rule(rule: &LifecycleRule) -> Result<(), String> {
     validate_expired_delete_marker_inputs(
         rule.expired_object_delete_marker == Some(true),
         rule.expiration
@@ -843,12 +844,11 @@ async fn setup_client(
         }
     };
 
-    let alias = match alias_manager.get(alias_name) {
-        Ok(alias) => alias,
-        Err(_) => {
-            formatter.error(&format!("Alias '{alias_name}' not found"));
-            return Err(ExitCode::NotFound);
-        }
+    let alias = if let Ok(alias) = alias_manager.get(alias_name) {
+        alias
+    } else {
+        formatter.error(&format!("Alias '{alias_name}' not found"));
+        return Err(ExitCode::NotFound);
     };
 
     let client = match S3Client::new(alias).await {
@@ -908,16 +908,15 @@ fn parse_bucket_path(path: &str) -> Result<(String, String), String> {
     Ok((parts[0].to_string(), parts[1].to_string()))
 }
 
-fn generate_rule_id() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    // Use lower 32 bits of nanosecond timestamp as a simple unique suffix
-    let suffix = format!("{:08x}", (nanos & 0xFFFF_FFFF) as u32);
-    format!("rule-{suffix}")
+fn generate_rule_id(seed: &str) -> String {
+    // FNV-1a is stable across processes and Rust versions, unlike DefaultHasher
+    // or a wall-clock suffix.
+    let mut hash: u32 = 0x811c_9dc5;
+    for byte in seed.as_bytes() {
+        hash ^= u32::from(*byte);
+        hash = hash.wrapping_mul(0x0100_0193);
+    }
+    format!("rule-{hash:08x}")
 }
 
 fn format_expiry(rule: &LifecycleRule) -> String {
@@ -970,9 +969,19 @@ mod tests {
 
     #[test]
     fn test_generate_rule_id_format() {
-        let id = generate_rule_id();
+        let id = generate_rule_id("bucket:0:AddRuleArgs { expiry_days: Some(30) }");
         assert!(id.starts_with("rule-"));
         assert_eq!(id.len(), 13); // "rule-" (5) + 8 hex chars
+    }
+
+    #[test]
+    fn test_generate_rule_id_is_deterministic() {
+        let first = generate_rule_id("local/bucket:0:rule");
+        let second = generate_rule_id("local/bucket:0:rule");
+        let different = generate_rule_id("local/bucket:1:rule");
+
+        assert_eq!(first, second);
+        assert_ne!(first, different);
     }
 
     #[test]

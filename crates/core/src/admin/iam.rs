@@ -304,7 +304,7 @@ fn normalize_group_mapping(mapping: &mut GroupPolicyEntities) -> Result<()> {
 }
 
 fn normalize_names(kind: &str, names: &mut Vec<String>) -> Result<()> {
-    for name in names.iter() {
+    for name in &*names {
         validate_name(kind, name)?;
     }
     names.sort();
@@ -484,7 +484,7 @@ mod tests {
         ));
         assert!(matches!(
             PolicyDetachRequest::new(
-                vec!["".to_string()],
+                vec![String::new()],
                 PolicyDetachEntity::User,
                 "alice".to_string(),
             ),

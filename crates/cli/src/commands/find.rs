@@ -75,7 +75,7 @@ struct MatchInfo {
 }
 
 /// Execute the find command
-pub async fn execute(args: FindArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: FindArgs, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
 
     // Parse path
@@ -96,12 +96,11 @@ pub async fn execute(args: FindArgs, output_config: OutputConfig) -> ExitCode {
         }
     };
 
-    let alias = match alias_manager.get(&alias_name) {
-        Ok(a) => a,
-        Err(_) => {
-            formatter.error(&format!("Alias '{alias_name}' not found"));
-            return ExitCode::NotFound;
-        }
+    let alias = if let Ok(a) = alias_manager.get(&alias_name) {
+        a
+    } else {
+        formatter.error(&format!("Alias '{alias_name}' not found"));
+        return ExitCode::NotFound;
     };
 
     // Create S3 client
@@ -156,8 +155,7 @@ pub async fn execute(args: FindArgs, output_config: OutputConfig) -> ExitCode {
                 Ok(output) => output,
                 Err(e) => {
                     formatter.error(&format!(
-                        "Failed to run command for {}: {} ({})",
-                        object_path, command_text, e
+                        "Failed to run command for {object_path}: {command_text} ({e})"
                     ));
                     return ExitCode::GeneralError;
                 }
@@ -174,8 +172,8 @@ pub async fn execute(args: FindArgs, output_config: OutputConfig) -> ExitCode {
 
             if !output.status.success() {
                 formatter.error(&format!(
-                    "Command failed for {} (status {}): {}",
-                    object_path, output.status, command_text
+                    "Command failed for {object_path} (status {}): {command_text}",
+                    output.status
                 ));
                 return ExitCode::GeneralError;
             }
@@ -223,7 +221,7 @@ pub async fn execute(args: FindArgs, output_config: OutputConfig) -> ExitCode {
     } else {
         for m in &display_matches {
             let size = m.size_human.as_deref().unwrap_or("0B");
-            let styled_size = formatter.style_size(&format!("{:>10}", size));
+            let styled_size = formatter.style_size(&format!("{size:>10}"));
             let styled_key = formatter.style_file(&m.key);
             formatter.println(&format!("{styled_size} {styled_key}"));
         }

@@ -302,7 +302,7 @@ fn normalize_event(record: RawNotificationEvent) -> Result<WatchEvent> {
         .parse()
         .map_err(|_| Error::General("Malformed watch event: invalid eventTime".to_string()))?;
     let key = urlencoding::decode(&record.s3.object.key)
-        .map(|decoded| decoded.into_owned())
+        .map(std::borrow::Cow::into_owned)
         .unwrap_or(record.s3.object.key);
     let event_id = non_empty(record.response_elements.get("x-amz-request-id").cloned())
         .or_else(|| non_empty(record.s3.object.sequencer));

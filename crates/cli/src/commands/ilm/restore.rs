@@ -34,7 +34,7 @@ struct RestoreOutput {
 }
 
 /// Execute the restore command
-pub async fn execute(args: RestoreArgs, output_config: OutputConfig) -> ExitCode {
+pub(crate) async fn execute(args: RestoreArgs, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
 
     let (alias_name, bucket, key) = match parse_object_path(&args.path) {
@@ -58,12 +58,11 @@ pub async fn execute(args: RestoreArgs, output_config: OutputConfig) -> ExitCode
         }
     };
 
-    let alias = match alias_manager.get(&alias_name) {
-        Ok(alias) => alias,
-        Err(_) => {
-            formatter.error(&format!("Alias '{alias_name}' not found"));
-            return ExitCode::NotFound;
-        }
+    let alias = if let Ok(alias) = alias_manager.get(&alias_name) {
+        alias
+    } else {
+        formatter.error(&format!("Alias '{alias_name}' not found"));
+        return ExitCode::NotFound;
     };
 
     let client = match S3Client::new(alias).await {

@@ -142,9 +142,11 @@ impl MultipartCopyPlan {
         let mut start = 0;
         for part_index in 0..part_count {
             let end_exclusive = (start + part_size).min(object_size);
+            let part_number = i32::try_from(part_index + 1).map_err(|_| {
+                Error::InvalidPath("Multipart copy part number exceeds i32".to_string())
+            })?;
             parts.push(MultipartCopyPart {
-                part_number: i32::try_from(part_index + 1)
-                    .expect("S3 multipart copy plans contain at most 10,000 parts"),
+                part_number,
                 start,
                 end_inclusive: end_exclusive - 1,
                 size: end_exclusive - start,

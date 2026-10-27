@@ -70,7 +70,7 @@ pub enum ObjectCommands {
 }
 
 /// Execute the object command group
-pub async fn execute(args: ObjectArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: ObjectArgs, output_config: OutputConfig) -> ExitCode {
     match args.command {
         ObjectCommands::List(args) => ls::execute(args, output_config).await,
         ObjectCommands::Copy(args) => cp::execute(*args, output_config).await,

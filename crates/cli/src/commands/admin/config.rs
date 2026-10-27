@@ -252,7 +252,7 @@ const RESTORE_PREVIEW_UNAVAILABLE_WARNING: &str = "The history entry is outside 
 const HELP_METADATA_WARNING: &str = "Server configuration help metadata is unavailable; validation is deferred to the mutation endpoint.";
 const MAX_CONFIG_VALUE_BYTES: u64 = 1024 * 1024;
 
-pub async fn execute(command: ConfigCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(command: ConfigCommands, formatter: &Formatter) -> ExitCode {
     let alias = command.alias();
     let client = match get_admin_client(alias, formatter) {
         Ok(client) => client,

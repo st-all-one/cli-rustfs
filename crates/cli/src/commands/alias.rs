@@ -217,7 +217,7 @@ struct AliasOperationOutput {
 }
 
 /// Execute an alias subcommand
-pub async fn execute(cmd: AliasCommands, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(cmd: AliasCommands, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
     let alias_manager = match AliasManager::new() {
         Ok(am) => am,
@@ -385,7 +385,8 @@ fn is_alias_authorization_only_failure(message: &str) -> bool {
 
 async fn execute_list(args: ListArgs, manager: &AliasManager, formatter: &Formatter) -> ExitCode {
     match manager.list() {
-        Ok(aliases) => {
+        Ok(mut aliases) => {
+            aliases.sort_by(|left, right| left.name.cmp(&right.name));
             if formatter.is_json() {
                 let output = AliasListOutput {
                     aliases: aliases.iter().map(AliasInfo::from).collect(),
@@ -526,8 +527,8 @@ fn execute_import(args: ImportArgs, manager: &AliasManager, formatter: &Formatte
         return formatter.fail(
             ExitCode::UsageError,
             &format!(
-                "Unsupported alias export schema version {}; expected {}",
-                document.schema_version, ALIAS_EXPORT_SCHEMA_VERSION
+                "Unsupported alias export schema version {}; expected {ALIAS_EXPORT_SCHEMA_VERSION}",
+                document.schema_version
             ),
         );
     }
@@ -720,7 +721,7 @@ async fn execute_remove(
             }
             ExitCode::Success
         }
-        Err(rc_core::Error::AliasNotFound(_)) => {
+        Err(Error::AliasNotFound(_)) => {
             formatter.error(&format!("Alias '{}' not found", args.name));
             ExitCode::NotFound
         }
@@ -732,14 +733,14 @@ async fn execute_remove(
     }
 }
 
-fn alias_endpoint_error_message(error: rc_core::Error) -> String {
+fn alias_endpoint_error_message(error: Error) -> String {
     match error {
-        rc_core::Error::Config(message) => message,
+        Error::Config(message) => message,
         other => format!("Invalid endpoint: {other}"),
     }
 }
 
-fn exit_code_from_error(error: &rc_core::Error) -> ExitCode {
+fn exit_code_from_error(error: &Error) -> ExitCode {
     ExitCode::from_i32(error.exit_code()).unwrap_or(ExitCode::GeneralError)
 }
 
@@ -967,9 +968,8 @@ mod tests {
 
     #[test]
     fn test_alias_endpoint_error_message_omits_config_prefix() {
-        let message = alias_endpoint_error_message(rc_core::Error::Config(
-            "Endpoint must include a host".to_string(),
-        ));
+        let message =
+            alias_endpoint_error_message(Error::Config("Endpoint must include a host".to_string()));
 
         assert_eq!(message, "Endpoint must include a host");
     }
@@ -1000,14 +1000,13 @@ mod tests {
                     return;
                 };
                 let mut request = [0_u8; 4096];
-                let _ = stream.read(&mut request).await;
+                drop(stream.read(&mut request).await);
                 let body = format!("<Error><Code>{code}</Code><Message>test</Message></Error>");
                 let response = format!(
-                    "HTTP/1.1 403 Forbidden\r\ncontent-type: application/xml\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
-                    body.len(),
-                    body
+                    "HTTP/1.1 403 Forbidden\r\ncontent-type: application/xml\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                    body.len()
                 );
-                let _ = stream.write_all(response.as_bytes()).await;
+                drop(stream.write_all(response.as_bytes()).await);
             }
         });
         format!("http://{addr}")

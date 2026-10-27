@@ -253,7 +253,7 @@ fn heal_status_indicator(status: &HealStatus) -> HealStatusIndicator {
 }
 
 /// Execute a heal subcommand
-pub async fn execute(cmd: HealCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(cmd: HealCommands, formatter: &Formatter) -> ExitCode {
     match cmd {
         HealCommands::Status(args) => execute_status(args, formatter).await,
         HealCommands::Start(args) => execute_start(args, formatter).await,
@@ -306,9 +306,8 @@ fn print_heal_status(status: &HealStatus, formatter: &Formatter) {
     };
 
     formatter.println(&format!(
-        "{} {}",
-        formatter.style_name("Heal Status:"),
-        healing_status
+        "{} {healing_status}",
+        formatter.style_name("Heal Status:")
     ));
     formatter.println("");
 
@@ -353,10 +352,10 @@ fn print_heal_status(status: &HealStatus, formatter: &Formatter) {
     }
 
     if let Some(ref summary) = status.summary {
-        formatter.println(&format!("  Summary:       {}", summary));
+        formatter.println(&format!("  Summary:       {summary}"));
     }
     if let Some(ref detail) = status.detail {
-        formatter.println(&format!("  Detail:        {}", detail));
+        formatter.println(&format!("  Detail:        {detail}"));
     }
 
     if status.healing || status.summary.is_some() {
@@ -392,10 +391,10 @@ fn print_heal_status(status: &HealStatus, formatter: &Formatter) {
         ));
 
         if let Some(ref started) = status.started {
-            formatter.println(&format!("  Started:       {}", started));
+            formatter.println(&format!("  Started:       {started}"));
         }
         if let Some(ref last_update) = status.last_update {
-            formatter.println(&format!("  Last Update:   {}", last_update));
+            formatter.println(&format!("  Last Update:   {last_update}"));
         }
     } else if incomplete || unknown {
         formatter.println("  Cluster idleness cannot be confirmed.");
@@ -455,7 +454,7 @@ async fn execute_start(args: StartArgs, formatter: &Formatter) -> ExitCode {
                     formatter.println(&format!("  Client Token:  {}", status.heal_id));
                 }
                 if let Some(ref started) = status.started {
-                    formatter.println(&format!("  Started:       {}", started));
+                    formatter.println(&format!("  Started:       {started}"));
                 }
             }
             ExitCode::Success
@@ -545,7 +544,7 @@ fn heal_task_request(
     formatter: &Formatter,
 ) -> Result<Option<HealTaskRequest>, ExitCode> {
     if prefix.as_deref().is_some_and(|prefix| !prefix.is_empty())
-        && bucket.as_deref().is_none_or(|bucket| bucket.is_empty())
+        && bucket.as_deref().is_none_or(str::is_empty)
     {
         formatter.error("Heal task prefix requires --bucket.");
         return Err(ExitCode::UsageError);
@@ -561,7 +560,7 @@ fn heal_task_request(
         (_, true) => Ok(Some(HealTaskRequest {
             bucket: bucket.unwrap_or_default(),
             prefix,
-            client_token: client_token.expect("client token is present"),
+            client_token: client_token.unwrap_or_default(),
         })),
         (true, false) => {
             formatter.error("Heal task request requires --client-token when --bucket is set.");
@@ -586,7 +585,7 @@ fn format_bytes(bytes: u64) -> String {
     } else if bytes >= KB {
         format!("{:.2} KiB", bytes as f64 / KB as f64)
     } else {
-        format!("{} B", bytes)
+        format!("{bytes} B")
     }
 }
 

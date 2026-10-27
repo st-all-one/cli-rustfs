@@ -1,3 +1,14 @@
+#![allow(
+    clippy::expect_used,
+    clippy::expect_fun_call,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    let_underscore_drop,
+    clippy::large_stack_arrays,
+    reason = "test fixtures and assertions fail fast with actionable diagnostics"
+)]
+
 use std::io::{ErrorKind, Read, Write};
 use std::net::TcpListener;
 use std::path::Path;
@@ -91,9 +102,8 @@ fn start_s3_script_server(
 
             let reason = if status == 200 { "OK" } else { "Error" };
             let response = format!(
-                "HTTP/1.1 {status} {reason}\r\ncontent-type: application/xml\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
-                response_body.len(),
-                response_body
+                "HTTP/1.1 {status} {reason}\r\ncontent-type: application/xml\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{response_body}",
+                response_body.len()
             );
             stream
                 .write_all(response.as_bytes())

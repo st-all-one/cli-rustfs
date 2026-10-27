@@ -9,17 +9,29 @@ pub mod qr;
 mod v3;
 
 // These exports will be used in Phase 2+ when commands are implemented
-#[allow(unused_imports)]
+#[allow(
+    unused_imports,
+    reason = "re-exported output API is consumed by downstream command modules"
+)]
 pub use formatter::Formatter;
-#[allow(unused_imports)]
+#[allow(
+    unused_imports,
+    reason = "re-exported output API is consumed by downstream command modules"
+)]
 pub use formatter::Theme;
-#[allow(unused_imports)]
+#[allow(
+    unused_imports,
+    reason = "re-exported output API is consumed by downstream command modules"
+)]
 pub use progress::ProgressBar;
 pub use v3::{V3ErrorEnvelope, V3PartialErrorEnvelope, V3SuccessEnvelope};
 
 /// Output configuration derived from CLI flags
 #[derive(Debug, Clone, Default)]
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "public compatibility surface kept for upcoming commands"
+)]
 pub struct OutputConfig {
     /// Use JSON output format
     pub json: bool,

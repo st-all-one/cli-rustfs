@@ -50,7 +50,7 @@ struct RebalanceOperationOutput {
 }
 
 /// Execute a rebalance subcommand
-pub async fn execute(cmd: RebalanceCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(cmd: RebalanceCommands, formatter: &Formatter) -> ExitCode {
     match cmd {
         RebalanceCommands::Start(args) => execute_start(args, formatter).await,
         RebalanceCommands::Status(args) => execute_status(args, formatter).await,
@@ -182,7 +182,7 @@ fn print_rebalance_status(status: &RebalanceStatus, formatter: &Formatter) {
         formatter.println(&format!("  ID: {}", status.id));
     }
     if let Some(stopped_at) = &status.stopped_at {
-        formatter.println(&format!("  Stopped: {}", stopped_at));
+        formatter.println(&format!("  Stopped: {stopped_at}"));
     }
 
     if status.pools.is_empty() {

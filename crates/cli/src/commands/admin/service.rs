@@ -34,7 +34,7 @@ pub struct ActionArgs {
 }
 
 /// Execute a service subcommand
-pub async fn execute(cmd: ServiceCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(cmd: ServiceCommands, formatter: &Formatter) -> ExitCode {
     let (action, args) = match cmd {
         ServiceCommands::Restart(args) => ("restart", args),
         ServiceCommands::Stop(args) => ("stop", args),

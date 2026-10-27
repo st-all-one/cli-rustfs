@@ -141,6 +141,9 @@ impl UploadState {
     pub fn add_completed_part(&mut self, part_number: i32, etag: String) {
         self.completed_parts
             .push(CompletedPart { part_number, etag });
+        // Keep the persisted state canonical: completion order is a scheduling
+        // detail and must not leak into the state file or resume output.
+        self.completed_parts.sort_by_key(|part| part.part_number);
         self.last_updated = jiff::Timestamp::now();
     }
 
@@ -222,6 +225,9 @@ impl UploadState {
             }
         }
 
+        // Directory enumeration order is filesystem-specific. Sort before the
+        // list can influence resume planning or user-visible output.
+        pending.sort_by(|left, right| left.upload_id.cmp(&right.upload_id));
         Ok(pending)
     }
 }
@@ -297,6 +303,21 @@ mod tests {
 
         state.add_completed_part(2, "etag2".to_string());
         assert_eq!(state.next_part_number(), 3);
+    }
+
+    #[test]
+    fn completed_parts_are_canonicalized() {
+        let mut state = UploadState::new("upload-123", "bucket/key", 1000, 100);
+        state.add_completed_part(3, "etag3".to_string());
+        state.add_completed_part(1, "etag1".to_string());
+        state.add_completed_part(2, "etag2".to_string());
+
+        let numbers: Vec<i32> = state
+            .completed_parts
+            .iter()
+            .map(|part| part.part_number)
+            .collect();
+        assert_eq!(numbers, vec![1, 2, 3]);
     }
 
     #[test]

@@ -140,7 +140,7 @@ pub enum SelectOptionsError {
 
 impl SelectOptions {
     /// Validate format-specific options before a request reaches an object store.
-    pub fn validate(&self) -> std::result::Result<(), SelectOptionsError> {
+    pub fn validate(&self) -> Result<(), SelectOptionsError> {
         if matches!(self.input_format, SelectInputFormat::Csv) {
             validate_single_byte(
                 "CSV input field delimiter",
@@ -186,7 +186,7 @@ impl SelectOptions {
         self.validate_scan_range()
     }
 
-    fn validate_scan_range(&self) -> std::result::Result<(), SelectOptionsError> {
+    fn validate_scan_range(&self) -> Result<(), SelectOptionsError> {
         let scan_range = &self.scan_range;
         if scan_range.start.is_none() && scan_range.end.is_none() {
             return Ok(());
@@ -217,25 +217,21 @@ impl SelectOptions {
 fn validate_single_byte(
     field: &'static str,
     value: Option<&str>,
-) -> std::result::Result<(), SelectOptionsError> {
+) -> Result<(), SelectOptionsError> {
     if value.is_some_and(|value| value.len() != 1) {
         return Err(SelectOptionsError::InvalidSingleByte { field });
     }
     Ok(())
 }
 
-fn validate_input_record_delimiter(
-    value: Option<&str>,
-) -> std::result::Result<(), SelectOptionsError> {
+fn validate_input_record_delimiter(value: Option<&str>) -> Result<(), SelectOptionsError> {
     if value.is_some_and(|value| !(1..=2).contains(&value.len())) {
         return Err(SelectOptionsError::InvalidCsvInputRecordDelimiter);
     }
     Ok(())
 }
 
-fn validate_output_record_delimiter(
-    value: Option<&str>,
-) -> std::result::Result<(), SelectOptionsError> {
+fn validate_output_record_delimiter(value: Option<&str>) -> Result<(), SelectOptionsError> {
     if value.is_some_and(|value| value.len() != 1 && value != "\r\n") {
         return Err(SelectOptionsError::InvalidCsvOutputRecordDelimiter);
     }

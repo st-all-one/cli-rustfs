@@ -1,3 +1,14 @@
+#![allow(
+    clippy::expect_used,
+    clippy::expect_fun_call,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    let_underscore_drop,
+    clippy::large_stack_arrays,
+    reason = "test fixtures and assertions fail fast with actionable diagnostics"
+)]
+
 //! CLI error output contract tests.
 //!
 //! These tests cover local validation paths that do not require a running S3
@@ -69,9 +80,8 @@ fn spawn_s3_error_server(code: &'static str) -> String {
             let _ = stream.read(&mut request);
             let body = format!("<Error><Code>{code}</Code><Message>test</Message></Error>");
             let response = format!(
-                "HTTP/1.1 403 Forbidden\r\ncontent-type: application/xml\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
-                body.len(),
-                body
+                "HTTP/1.1 403 Forbidden\r\ncontent-type: application/xml\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                body.len()
             );
             let _ = stream.write_all(response.as_bytes());
         }

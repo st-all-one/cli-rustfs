@@ -250,7 +250,7 @@ pub struct RemoveArgs {
 }
 
 /// Execute a site replication subcommand
-pub async fn execute(cmd: ReplicateCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(cmd: ReplicateCommands, formatter: &Formatter) -> ExitCode {
     match cmd {
         ReplicateCommands::Add(args) => execute_add(args, formatter).await,
         ReplicateCommands::Info(args) => execute_info(args, formatter).await,
@@ -350,21 +350,18 @@ async fn execute_info(args: InfoArgs, formatter: &Formatter) -> ExitCode {
                     false,
                     safe_info,
                 ));
-            } else {
-                if !info.enabled {
-                    formatter.println("Site replication is not configured.");
-                } else {
-                    if !info.name.is_empty() {
-                        formatter
-                            .println(&format!("Cluster: {}", formatter.sanitize_text(&info.name)));
-                    }
-                    formatter.println("Sites:");
-                    for site in &info.sites {
-                        let name = formatter.sanitize_text(site.name().unwrap_or("-"));
-                        let endpoint = formatter.sanitize_text(site.endpoint().unwrap_or("-"));
-                        formatter.println(&format!("  {name}  {endpoint}"));
-                    }
+            } else if info.enabled {
+                if !info.name.is_empty() {
+                    formatter.println(&format!("Cluster: {}", formatter.sanitize_text(&info.name)));
                 }
+                formatter.println("Sites:");
+                for site in &info.sites {
+                    let name = formatter.sanitize_text(site.name().unwrap_or("-"));
+                    let endpoint = formatter.sanitize_text(site.endpoint().unwrap_or("-"));
+                    formatter.println(&format!("  {name}  {endpoint}"));
+                }
+            } else {
+                formatter.println("Site replication is not configured.");
             }
             ExitCode::Success
         }
@@ -834,10 +831,9 @@ fn emit_repair_sites_human(
                     .map(|value| format!(", error={}", formatter.sanitize_text(value)))
                     .unwrap_or_default();
                 formatter.println(&format!(
-                    "      {}: {}{}",
+                    "      {}: {}{error}",
                     formatter.sanitize_text(&task.task_id),
-                    formatter.sanitize_text(&task.status),
-                    error
+                    formatter.sanitize_text(&task.status)
                 ));
             }
         }
@@ -1534,10 +1530,10 @@ async fn execute_status(args: StatusArgs, formatter: &Formatter) -> ExitCode {
     }
 }
 
-fn print_replication_status(status: &serde_json::Value, formatter: &Formatter) {
+fn print_replication_status(status: &Value, formatter: &Formatter) {
     let enabled = status
         .get("enabled")
-        .and_then(|v| v.as_bool())
+        .and_then(Value::as_bool)
         .unwrap_or(false);
     if !enabled {
         formatter.println("Site replication is not configured.");
@@ -1553,7 +1549,7 @@ fn print_replication_status(status: &serde_json::Value, formatter: &Formatter) {
         }
     }
 
-    let count = |key: &str| status.get(key).and_then(|v| v.as_u64()).unwrap_or_default();
+    let count = |key: &str| status.get(key).and_then(Value::as_u64).unwrap_or_default();
     formatter.println(&format!(
         "Replicated entities: buckets={} users={} groups={} policies={}",
         count("MaxBuckets"),
@@ -1868,7 +1864,7 @@ mod tests {
     }
 
     fn output_v3_validator() -> Validator {
-        let schema_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        let schema_path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
             .join("schemas/output_v3.json");
         let schema = std::fs::read_to_string(&schema_path)

@@ -3,9 +3,9 @@
 //! Add, edit, list, remove, export, and import lifecycle rules;
 //! manage remote storage tiers; restore transitioned objects.
 
-pub mod restore;
-pub mod rule;
-pub mod tier;
+pub(super) mod restore;
+pub(super) mod rule;
+pub(super) mod tier;
 
 use clap::{Args, Subcommand};
 
@@ -34,7 +34,7 @@ pub enum IlmCommands {
 }
 
 /// Execute the ilm command
-pub async fn execute(args: IlmArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: IlmArgs, output_config: OutputConfig) -> ExitCode {
     match args.command {
         IlmCommands::Rule(cmd) => rule::execute(cmd, output_config).await,
         IlmCommands::Tier(cmd) => tier::execute(cmd, output_config).await,

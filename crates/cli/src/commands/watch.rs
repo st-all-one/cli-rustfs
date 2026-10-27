@@ -158,7 +158,7 @@ struct WatchStandardError {
 }
 
 /// Execute the watch command.
-pub async fn execute(args: WatchArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: WatchArgs, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
     let (alias_name, request) = match build_watch_request(&args) {
         Ok(request) => request,
@@ -205,7 +205,7 @@ pub async fn execute(args: WatchArgs, output_config: OutputConfig) -> ExitCode {
     };
 
     let mut cancellation: Pin<Box<dyn Future<Output = ()> + Send>> = Box::pin(async {
-        let _ = tokio::signal::ctrl_c().await;
+        drop(tokio::signal::ctrl_c().await);
     });
 
     let mut server_version = None;
@@ -892,12 +892,7 @@ mod tests {
                 max_delay: Duration::ZERO,
             },
             Box::pin(std::future::pending()),
-            |_| {
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::BrokenPipe,
-                    "reader closed",
-                ))
-            },
+            |_| Err(io::Error::new(io::ErrorKind::BrokenPipe, "reader closed")),
         )
         .await
         .expect("broken stdout should be a clean termination");

@@ -17,7 +17,7 @@ use rc_core::{Error, Result};
 use crate::output::Formatter;
 
 /// What to say while confirming one particular action.
-pub(crate) struct Confirmation<'a> {
+pub struct Confirmation<'a> {
     /// The question, ending in `[y/N]`.
     ///
     /// Callers that interpolate a name are responsible for passing it through
@@ -35,7 +35,7 @@ pub(crate) struct Confirmation<'a> {
 /// `Ok(())` means go ahead. A refusal is [`Error::Interrupted`]; a run that
 /// could not ask at all is [`Error::InvalidPath`], which is a usage problem and
 /// exits as one.
-pub(crate) fn confirm(request: &Confirmation<'_>, yes: bool, formatter: &Formatter) -> Result<()> {
+pub fn confirm(request: &Confirmation<'_>, yes: bool, formatter: &Formatter) -> Result<()> {
     if yes {
         return Ok(());
     }

@@ -667,7 +667,7 @@ pub fn publish_inspect_archive(
         .and_then(|directory| directory.sync_all())
         .is_err()
     {
-        let _ = std::fs::remove_file(destination);
+        drop(std::fs::remove_file(destination));
         return Err(Error::InvalidPath(
             "Failed to sync diagnostic archive output directory".to_string(),
         ));

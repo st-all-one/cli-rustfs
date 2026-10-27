@@ -92,8 +92,8 @@ fn route(request: &CatalogRequest) -> Result<(Method, String)> {
     let child = urlencoding::encode(child);
     let (method, path) = match request.operation {
         Op::Config => (Method::GET, "/config".into()),
-        Op::WarehouseShow => (Method::GET, format!("/buckets{}", warehouse)),
-        Op::WarehouseEnable => (Method::PUT, format!("/buckets{}", warehouse)),
+        Op::WarehouseShow => (Method::GET, format!("/buckets{warehouse}")),
+        Op::WarehouseEnable => (Method::PUT, format!("/buckets{warehouse}")),
         Op::NamespaceCreate => (Method::POST, namespaces),
         Op::NamespaceList => (Method::GET, namespaces),
         Op::NamespaceShow => (Method::GET, ns),
@@ -178,7 +178,7 @@ fn catalog_wire_body(request: &CatalogRequest) -> Option<Value> {
 }
 
 fn catalog_error(status: StatusCode, message: &str) -> Error {
-    let message = format!("Catalog HTTP {}: {}", status.as_u16(), message);
+    let message = format!("Catalog HTTP {}: {message}", status.as_u16());
     match status.as_u16() {
         400 | 422 => Error::Config(message),
         401 | 403 => Error::Auth(message),

@@ -68,7 +68,7 @@ impl From<RetentionModeArg> for RetentionMode {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct LocksData {
+pub(super) struct LocksData {
     operation: &'static str,
     changed: bool,
     items: Vec<LockStateOutput>,
@@ -85,7 +85,7 @@ impl LocksData {
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct LockStateOutput {
+pub(super) struct LockStateOutput {
     bucket: String,
     key: String,
     version_id: Option<String>,
@@ -144,7 +144,7 @@ impl LockStateOutput {
     }
 }
 
-pub async fn execute(args: LockArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: LockArgs, output_config: OutputConfig) -> ExitCode {
     match args.command {
         LockCommands::Info(args) => execute_info(args, output_config).await,
         LockCommands::Set(args) => execute_set(args, output_config).await,
@@ -326,14 +326,14 @@ fn parse_bucket_duration(
     }
 }
 
-pub(crate) fn parse_bucket_path(value: &str) -> Result<RemotePath, String> {
+pub(super) fn parse_bucket_path(value: &str) -> Result<RemotePath, String> {
     match parse_path(value).map_err(|error| error.to_string())? {
         ParsedPath::Remote(path) if path.key.is_empty() => Ok(path),
         _ => Err("Bucket path must use the form alias/bucket".to_string()),
     }
 }
 
-pub(crate) async fn setup_client(
+pub(super) async fn setup_client(
     alias_name: &str,
     formatter: &Formatter,
     capability: &str,
@@ -348,7 +348,7 @@ pub(crate) async fn setup_client(
     })
 }
 
-pub(crate) fn emit_lock_output(formatter: &Formatter, data: LocksData) -> ExitCode {
+pub(super) fn emit_lock_output(formatter: &Formatter, data: LocksData) -> ExitCode {
     if formatter.is_json() {
         formatter.json(&V3SuccessEnvelope::locks(&data));
     } else {
@@ -421,7 +421,7 @@ fn render_lock_table(items: &[LockStateOutput], formatter: &Formatter) -> String
     table.to_string()
 }
 
-pub(crate) fn fail_core_lock(
+pub(super) fn fail_core_lock(
     formatter: &Formatter,
     error: &rc_core::Error,
     context: &str,
@@ -431,7 +431,7 @@ pub(crate) fn fail_core_lock(
     fail_lock(formatter, code, &format!("{context}: {error}"), capability)
 }
 
-pub(crate) fn fail_lock(
+pub(super) fn fail_lock(
     formatter: &Formatter,
     code: ExitCode,
     message: &str,

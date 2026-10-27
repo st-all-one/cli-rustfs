@@ -258,7 +258,7 @@ struct NormalizedDelMarkerInput {
 }
 
 impl<'de> Deserialize<'de> for LifecycleRule {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -393,9 +393,7 @@ struct FilterFields {
 ///
 /// An empty `Filter` object stays valid: the server documents it as "applies to
 /// every object in the bucket".
-fn resolve_filter_fields(
-    filter: Option<LifecycleFilterInput>,
-) -> std::result::Result<FilterFields, String> {
+fn resolve_filter_fields(filter: Option<LifecycleFilterInput>) -> Result<FilterFields, String> {
     let Some(filter) = filter else {
         return Ok(FilterFields::default());
     };
@@ -458,7 +456,7 @@ fn merge_exclusive<T>(
     nested: Option<T>,
     flat_name: &str,
     nested_name: &str,
-) -> std::result::Result<Option<T>, String> {
+) -> Result<Option<T>, String> {
     match (flat, nested) {
         (Some(_), Some(_)) => Err(format!(
             "lifecycle rule sets both {flat_name} and {nested_name}; specify one"
@@ -472,7 +470,7 @@ fn merge_equal_optional<T: PartialEq>(
     primary: Option<T>,
     secondary: Option<T>,
     field_name: &str,
-) -> std::result::Result<Option<T>, String> {
+) -> Result<Option<T>, String> {
     match (primary, secondary) {
         (Some(primary_value), Some(secondary_value)) if primary_value != secondary_value => {
             Err(format!("conflicting {field_name} values in lifecycle rule"))
@@ -485,7 +483,7 @@ fn merge_equal_optional<T: PartialEq>(
 fn normalize_del_marker_input(
     input: Option<LifecycleDelMarkerInput>,
     fallback_days: Option<i32>,
-) -> std::result::Result<Option<NormalizedDelMarkerInput>, String> {
+) -> Result<Option<NormalizedDelMarkerInput>, String> {
     match input {
         None => Ok(None),
         Some(LifecycleDelMarkerInput::Flag(false)) => Ok(Some(NormalizedDelMarkerInput {
@@ -515,7 +513,7 @@ fn normalize_del_marker_input(
 fn merge_del_marker_inputs(
     top_level: Option<NormalizedDelMarkerInput>,
     nested: Option<NormalizedDelMarkerInput>,
-) -> std::result::Result<Option<LifecycleDelMarkerExpiration>, String> {
+) -> Result<Option<LifecycleDelMarkerExpiration>, String> {
     match (top_level, nested) {
         (None, None) => Ok(None),
         (Some(value), None) | (None, Some(value)) => Ok(value.enabled.then(|| {

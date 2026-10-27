@@ -18,8 +18,8 @@ use super::get_admin_client;
 use crate::exit_code::ExitCode;
 use crate::output::Formatter;
 
-pub use client_devnull::ClientDevnullArgs;
-pub use inspect_archive::InspectArchiveArgs;
+pub(super) use client_devnull::ClientDevnullArgs;
+pub(super) use inspect_archive::InspectArchiveArgs;
 
 #[derive(Subcommand, Debug, Clone)]
 pub enum DiagnosticsCommands {
@@ -45,7 +45,7 @@ pub struct DiagnosticsArgs {
 
 impl DiagnosticsCommands {
     #[cfg(test)]
-    pub const fn name(&self) -> &'static str {
+    pub(crate) const fn name(&self) -> &'static str {
         match self {
             Self::Health(_) => "health",
             Self::Cluster(_) => "cluster",
@@ -55,7 +55,7 @@ impl DiagnosticsCommands {
         }
     }
 
-    pub fn alias(&self) -> &str {
+    pub(crate) fn alias(&self) -> &str {
         match self {
             Self::Health(args) | Self::Cluster(args) | Self::Extensions(args) => &args.alias,
             Self::ClientDevnull(args) => &args.alias,
@@ -127,7 +127,7 @@ struct ErrorBody<'a> {
     suggestion: Option<&'static str>,
 }
 
-pub async fn execute(command: DiagnosticsCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(command: DiagnosticsCommands, formatter: &Formatter) -> ExitCode {
     match command {
         DiagnosticsCommands::ClientDevnull(args) => {
             client_devnull::execute_client_devnull(args, formatter).await
@@ -461,10 +461,9 @@ fn output_extensions(mut catalog: ExtensionsCatalog, formatter: &Formatter) -> E
                     format!(" reason={}", formatter.sanitize_text(reason))
                 });
                 formatter.println(&format!(
-                    "  {} state={}{}",
+                    "  {} state={}{suffix}",
                     formatter.sanitize_text(extension_id),
-                    formatter.sanitize_text(state),
-                    suffix
+                    formatter.sanitize_text(state)
                 ));
             }
         }

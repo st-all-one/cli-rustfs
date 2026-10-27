@@ -101,7 +101,7 @@ fn build_display_metadata(info: &ObjectInfo) -> BTreeMap<String, String> {
 }
 
 /// Execute the stat command
-pub async fn execute(args: StatArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: StatArgs, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
     let version_output = args.version_id.is_some();
 
@@ -205,7 +205,7 @@ pub async fn execute(args: StatArgs, output_config: OutputConfig) -> ExitCode {
                             size_human: info.size_human.clone(),
                             etag: info.etag.clone(),
                             content_type: info.content_type.clone(),
-                            storage_class: info.storage_class.clone(),
+                            storage_class: info.storage_class,
                             metadata,
                         },
                     }));
@@ -218,7 +218,7 @@ pub async fn execute(args: StatArgs, output_config: OutputConfig) -> ExitCode {
                         etag: info.etag.clone(),
                         content_type: info.content_type.clone(),
                         storage_class: info.storage_class.clone(),
-                        version_id: info.version_id.clone(),
+                        version_id: info.version_id,
                         metadata,
                     };
                     formatter.json(&output);
@@ -226,11 +226,7 @@ pub async fn execute(args: StatArgs, output_config: OutputConfig) -> ExitCode {
             } else {
                 // Helper to format key-value pairs with styling
                 let format_kv = |key: &str, value: &str| {
-                    format!(
-                        "{} : {}",
-                        formatter.style_key(&format!("{:<9}", key)),
-                        value
-                    )
+                    format!("{} : {value}", formatter.style_key(&format!("{key:<9}")))
                 };
 
                 formatter.println(&format_kv("Name", &formatter.style_file(&info.key)));

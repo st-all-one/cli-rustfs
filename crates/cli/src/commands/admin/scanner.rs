@@ -36,7 +36,7 @@ struct ScannerOutput<'a> {
     status: &'a ScannerStatus,
 }
 
-pub async fn execute(command: ScannerCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(command: ScannerCommands, formatter: &Formatter) -> ExitCode {
     match command {
         ScannerCommands::Status(args) => execute_status(args, formatter).await,
     }

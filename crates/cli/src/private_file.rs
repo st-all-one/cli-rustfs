@@ -24,7 +24,7 @@ use rc_core::Result;
 ///
 /// Returns the underlying [`std::io::Error`] as-is — including
 /// [`std::io::ErrorKind::AlreadyExists`] — for the caller to classify.
-pub(crate) fn write_private_file(path: &Path, contents: &[u8]) -> Result<()> {
+pub fn write_private_file(path: &Path, contents: &[u8]) -> Result<()> {
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]

@@ -620,7 +620,7 @@ mod tests {
                     async move {
                         let current = active.fetch_add(1, Ordering::SeqCst) + 1;
                         maximum.fetch_max(current, Ordering::SeqCst);
-                        tokio::time::sleep(Duration::from_millis(10)).await;
+                        sleep(Duration::from_millis(10)).await;
                         active.fetch_sub(1, Ordering::SeqCst);
                         Ok(1)
                     }
@@ -792,10 +792,10 @@ mod tests {
                     async move {
                         calls.fetch_add(1, Ordering::SeqCst);
                         if item.relative_path == "a" {
-                            tokio::time::sleep(Duration::from_millis(5)).await;
+                            sleep(Duration::from_millis(5)).await;
                             Err(Error::Auth("stop".to_string()))
                         } else {
-                            tokio::time::sleep(Duration::from_millis(10)).await;
+                            sleep(Duration::from_millis(10)).await;
                             Ok(1)
                         }
                     }

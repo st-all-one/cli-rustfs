@@ -159,7 +159,7 @@ struct ErrorDetail {
     suggestion: &'static str,
 }
 
-pub async fn execute(command: BucketMetadataCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(command: BucketMetadataCommands, formatter: &Formatter) -> ExitCode {
     let alias = match &command {
         BucketMetadataCommands::Export(args) => &args.alias,
         BucketMetadataCommands::Import(args) => &args.alias,
@@ -216,8 +216,7 @@ async fn export(
         .collect();
     emit_success(operations, formatter, || {
         formatter.success(&format!(
-            "Exported validated metadata for {} bucket(s) to {}",
-            bucket_count,
+            "Exported validated metadata for {bucket_count} bucket(s) to {}",
             args.file.display()
         ));
     });
@@ -252,7 +251,7 @@ async fn import(
         .await?;
     }
     emit_success(operations, formatter, || {
-        plan.print(args.dry_run, formatter)
+        plan.print(args.dry_run, formatter);
     });
     Ok(())
 }
@@ -376,7 +375,12 @@ impl ValidatedArchive {
                     "Bucket metadata archive expands beyond the 128 MiB limit".to_string(),
                 ));
             }
-            let name = file.name().to_string();
+            let name = file
+                .name()
+                .map_err(|_| {
+                    Error::Config("Bucket metadata archive entry has no valid name".to_string())
+                })?
+                .to_string();
             let mut parts = name.split('/');
             let bucket = parts.next().unwrap_or_default();
             let config = parts.next().unwrap_or_default();
@@ -514,7 +518,7 @@ fn contains_unusable_target_secret(value: &serde_json::Value) -> bool {
         serde_json::Value::Object(values) => values.iter().any(|(key, value)| {
             let normalized = key
                 .chars()
-                .filter(|character| character.is_ascii_alphanumeric())
+                .filter(char::is_ascii_alphanumeric)
                 .flat_map(char::to_lowercase)
                 .collect::<String>();
             if normalized == "secretkey" {
@@ -557,9 +561,7 @@ impl ImportPlan {
             .collect::<BTreeMap<_, _>>();
         let mut remove = Vec::new();
         for (key, requested_entry) in &requested.entries {
-            let bucket = buckets
-                .get_mut(&key.0)
-                .expect("bucket plan was created from requested entries");
+            let bucket = buckets.entry(key.0.clone()).or_default();
             bucket.configs += 1;
             if let Some(current_entry) = current.entries.get(key) {
                 if current_entry.bytes.as_slice() == requested_entry.bytes.as_slice() {

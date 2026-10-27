@@ -263,7 +263,7 @@ struct PolicyDetachErrorBody {
 }
 
 /// Execute a policy subcommand
-pub async fn execute(cmd: PolicyCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(cmd: PolicyCommands, formatter: &Formatter) -> ExitCode {
     match cmd {
         PolicyCommands::List(args) => execute_list(args, formatter).await,
         PolicyCommands::Create(args) => execute_create(args, formatter).await,
@@ -335,8 +335,7 @@ async fn execute_detach_with_api(
             return emit_policy_detach_error(
                 "IAM policy detach capability is unavailable",
                 &Error::UnsupportedFeature(format!(
-                    "{} is {}{}",
-                    IAM_POLICY_DETACH_CAPABILITY,
+                    "{IAM_POLICY_DETACH_CAPABILITY} is {}{}",
                     capability.availability,
                     capability
                         .reason
@@ -495,8 +494,7 @@ async fn execute_entities_with_api(
             return emit_policy_entities_error(
                 "IAM policy-entity capability is unavailable",
                 &Error::Auth(format!(
-                    "{} is permission-denied",
-                    IAM_POLICY_ENTITIES_CAPABILITY
+                    "{IAM_POLICY_ENTITIES_CAPABILITY} is permission-denied"
                 )),
                 formatter,
             );
@@ -505,8 +503,7 @@ async fn execute_entities_with_api(
             return emit_policy_entities_error(
                 "IAM policy-entity capability is unavailable",
                 &Error::UnsupportedFeature(format!(
-                    "{} is {}{}",
-                    IAM_POLICY_ENTITIES_CAPABILITY,
+                    "{IAM_POLICY_ENTITIES_CAPABILITY} is {}{}",
                     capability.availability,
                     capability
                         .reason
@@ -836,7 +833,7 @@ async fn execute_info(args: InfoArgs, formatter: &Formatter) -> ExitCode {
             }
             ExitCode::Success
         }
-        Err(rc_core::Error::NotFound(_)) => {
+        Err(Error::NotFound(_)) => {
             formatter.error(&format!("Policy '{}' not found", args.name));
             ExitCode::NotFound
         }
@@ -868,7 +865,7 @@ async fn execute_remove(args: RemoveArgs, formatter: &Formatter) -> ExitCode {
             }
             ExitCode::Success
         }
-        Err(rc_core::Error::NotFound(_)) => {
+        Err(Error::NotFound(_)) => {
             formatter.error(&format!("Policy '{}' not found", args.name));
             ExitCode::NotFound
         }
@@ -912,17 +909,16 @@ async fn execute_attach(args: AttachArgs, formatter: &Formatter) -> ExitCode {
     {
         Ok(()) => {
             let entity_desc = match entity_type {
-                PolicyEntity::User => format!("user '{}'", entity_name),
-                PolicyEntity::Group => format!("group '{}'", entity_name),
+                PolicyEntity::User => format!("user '{entity_name}'"),
+                PolicyEntity::Group => format!("group '{entity_name}'"),
             };
             if formatter.is_json() {
                 let output = PolicyOperationOutput {
                     success: true,
                     name: policy_names.join(","),
                     message: format!(
-                        "Policy '{}' attached to {} successfully",
-                        policy_names.join(","),
-                        entity_desc
+                        "Policy '{}' attached to {entity_desc} successfully",
+                        policy_names.join(",")
                     ),
                 };
                 formatter.json(&output);
@@ -1156,7 +1152,7 @@ mod tests {
             .join("../..")
             .join("schemas/output_v3.json");
         let schema: Value = serde_json::from_str(
-            &std::fs::read_to_string(path).expect("output schema should be readable"),
+            &fs::read_to_string(path).expect("output schema should be readable"),
         )
         .expect("output schema should parse");
         jsonschema::validator_for(&schema).expect("output schema should compile")

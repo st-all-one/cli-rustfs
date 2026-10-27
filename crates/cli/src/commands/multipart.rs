@@ -554,7 +554,7 @@ mod tests {
 
     #[tokio::test]
     async fn dry_run_returns_sorted_plan_without_calling_abort() {
-        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let calls = Arc::new(AtomicUsize::new(0));
         let calls_for_abort = Arc::clone(&calls);
         let result = cleanup_multipart_uploads(
             vec![upload("z.bin", "2"), upload("a.bin", "1")],
@@ -564,13 +564,13 @@ mod tests {
                 retry: RetryConfig::default(),
             },
             move |_| {
-                calls_for_abort.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                calls_for_abort.fetch_add(1, Ordering::SeqCst);
                 std::future::ready(Ok(()))
             },
         )
         .await;
 
-        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
         assert_eq!(result.completed[0].key, "a.bin");
         assert_eq!(result.completed[1].key, "z.bin");
         assert!(result.failed.is_empty());

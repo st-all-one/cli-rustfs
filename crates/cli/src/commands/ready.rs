@@ -18,7 +18,7 @@ pub struct ReadyArgs {
 }
 
 /// Execute a readiness probe.
-pub async fn execute(args: ReadyArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: ReadyArgs, output_config: OutputConfig) -> ExitCode {
     ping::execute_probe(
         &args.alias,
         args.timeout,

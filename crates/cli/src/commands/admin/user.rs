@@ -213,7 +213,7 @@ struct UserOperationOutput {
 }
 
 /// Execute a user subcommand
-pub async fn execute(cmd: UserCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(cmd: UserCommands, formatter: &Formatter) -> ExitCode {
     match cmd {
         UserCommands::List(args) => execute_list(args, formatter).await,
         UserCommands::Add(args) => execute_add(args, formatter).await,

@@ -285,7 +285,7 @@ struct MfaOperationOutput {
 }
 
 /// Execute an account subcommand
-pub async fn execute(cmd: AccountCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(cmd: AccountCommands, formatter: &Formatter) -> ExitCode {
     match cmd {
         AccountCommands::Info(args) => execute_info(args, formatter).await,
         AccountCommands::Passwd(args) => execute_passwd(args, formatter).await,

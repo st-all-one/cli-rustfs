@@ -1,0 +1,16 @@
+# rc rustfmt configuration (stable options only; see AGENTS.md).
+#
+# The toolchain is stable (1.99), so unstable options such as `imports_granularity`,
+# `group_imports`, `wrap_comments`, or `format_code_in_doc_comments` are intentionally
+# absent: stable rustfmt ignores them with a warning. Imports are grouped by hand.
+
+edition = "2024"
+# Explicit Style Guide edition (RFC 3338) so direct `rustfmt` and `cargo fmt` agree.
+style_edition = "2024"
+max_width = 100
+tab_spaces = 4
+newline_style = "Unix"
+# Project convention: hashes and IDs are emitted as lowercase hex.
+hex_literal_case = "Lower"
+use_field_init_shorthand = true
+use_try_shorthand = true

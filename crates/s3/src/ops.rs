@@ -39,7 +39,7 @@ impl HealthApi for AdminClient {
         }
 
         let path = probe.path();
-        let url = format!("{}{}", self.endpoint(), path);
+        let url = format!("{}{path}", self.endpoint());
         let started = Instant::now();
         let response = self
             .http_client()

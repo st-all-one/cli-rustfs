@@ -1,0 +1,27 @@
+# typos — spelling gate for code and docs.
+# Domain acronyms and wire-format names are legitimate; generated/build trees are excluded.
+[files]
+extend-exclude = [
+    "target/",
+    "bench/target/",
+    "bench/results/",
+    "Cargo.lock",
+    "*.snap",
+]
+
+[default.extend-words]
+Nd = "Nd"
+Ny = "Ny"
+GOST = "GOST"
+abd = "abd"
+unparseable = "unparseable"
+Gost = "Gost"
+rustfs = "rustfs"
+RustFS = "RustFS"
+SigV4 = "SigV4"
+mTLS = "mTLS"
+KMS = "KMS"
+OIDC = "OIDC"
+SSE = "SSE"
+SSEKMS = "SSEKMS"
+WebPKI = "WebPKI"

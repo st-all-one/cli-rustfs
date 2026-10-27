@@ -357,6 +357,22 @@ enum Projection {
     Snapshots,
     Snapshot(i64),
 }
+fn body_mut(prepared: &mut Prepared) -> Result<&mut Value> {
+    prepared
+        .request
+        .body
+        .as_mut()
+        .ok_or_else(|| Error::Config("Request body is required".into()))
+}
+
+fn body_ref(prepared: &Prepared) -> Result<&Value> {
+    prepared
+        .request
+        .body
+        .as_ref()
+        .ok_or_else(|| Error::Config("Request body is required".into()))
+}
+
 fn prepare(op: Op, args: TargetArgs, kind: Kind) -> Result<Prepared> {
     Ok(Prepared {
         request: CatalogRequest::new(op, CatalogTarget::parse(&args.target, kind)?),
@@ -534,7 +550,7 @@ fn prepare_table(command: TableCommands) -> Result<Prepared> {
         }
         TableCommands::Commit(a) => {
             let mut p = file(Op::Commit, a.input)?;
-            let body = p.request.body.as_mut().expect("file request has a body");
+            let body = body_mut(&mut p)?;
             if body
                 .get("commit-id")
                 .is_some_and(|old| old != &json!(a.commit_id))
@@ -628,21 +644,22 @@ fn prepare_table(command: TableCommands) -> Result<Prepared> {
                 p.request.body = Some(
                     json!({"expected-snapshot-id":a.expected_snapshot_id,"commit-id":a.commit_id,"force":a.force}),
                 );
-                require_string(p.request.body.as_ref().expect("body"), "commit-id")?;
+                require_string(body_ref(&p)?, "commit-id")?;
                 Ok(p)
             }
         },
         TableCommands::View(command) => match command {
             ViewCommands::Create(a) => {
                 let mut p = file(Op::ViewCreate, a)?;
-                let body = p.request.body.as_mut().expect("body");
+                let target_name = p.request.target.name.clone();
+                let body = body_mut(&mut p)?;
                 if body
                     .get("name")
-                    .is_some_and(|name| name != &json!(p.request.target.name))
+                    .is_some_and(|name| name != &json!(target_name))
                 {
                     return Err(Error::Config("View name differs from target".into()));
                 }
-                body["name"] = json!(p.request.target.name);
+                body["name"] = json!(target_name);
                 Ok(p)
             }
             ViewCommands::List(a) => list(Op::ViewList, a, Kind::Namespace),
@@ -651,10 +668,7 @@ fn prepare_table(command: TableCommands) -> Result<Prepared> {
             ViewCommands::Remove(a) => prepare(Op::ViewRemove, a, Kind::Table),
             ViewCommands::Replace(a) => {
                 let p = file(Op::ViewReplace, a)?;
-                require_string(
-                    p.request.body.as_ref().expect("body"),
-                    "expected-metadata-location",
-                )?;
+                require_string(body_ref(&p)?, "expected-metadata-location")?;
                 Ok(p)
             }
         },
@@ -694,12 +708,12 @@ fn prepare_admin(command: AdminTableCommands) -> Result<Prepared> {
             CatalogCommands::Recover(a) => admin_mutation(Op::Recover, a, Kind::Table),
             CatalogCommands::Rollback(a) => {
                 let p = admin_file(Op::Rollback, a)?;
-                require_string(p.request.body.as_ref().expect("body"), "version-token")?;
+                require_string(body_ref(&p)?, "version-token")?;
                 Ok(p)
             }
             CatalogCommands::MetadataUpdate(a) => {
                 let p = admin_file(Op::MetadataUpdate, a)?;
-                require_string(p.request.body.as_ref().expect("body"), "version-token")?;
+                require_string(body_ref(&p)?, "version-token")?;
                 Ok(p)
             }
             CatalogCommands::External(c) => match c {
@@ -711,7 +725,7 @@ fn prepare_admin(command: AdminTableCommands) -> Result<Prepared> {
         AdminTableCommands::Maintenance(c) => match c {
             MaintenanceCommands::Plan(a) => {
                 let mut p = file(Op::MaintenancePlan, a)?;
-                let body = p.request.body.as_mut().expect("body");
+                let body = body_mut(&mut p)?;
                 for key in ["delete", "commit-snapshot-expiration", "commit-compaction"] {
                     body[key] = json!(false);
                 }
@@ -750,10 +764,10 @@ fn prepare_admin(command: AdminTableCommands) -> Result<Prepared> {
     }
 }
 
-pub async fn execute(command: TableCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(command: TableCommands, formatter: &Formatter) -> ExitCode {
     run(prepare_table(command), formatter).await
 }
-pub async fn execute_admin(command: AdminTableCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute_admin(command: AdminTableCommands, formatter: &Formatter) -> ExitCode {
     run(prepare_admin(command), formatter).await
 }
 async fn run(prepared: Result<Prepared>, formatter: &Formatter) -> ExitCode {

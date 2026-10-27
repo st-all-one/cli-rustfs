@@ -660,7 +660,7 @@ fn is_missing_cors_configuration_response(
     status_code: Option<u16>,
     error_text: &str,
 ) -> bool {
-    let error_code = error_code.map(|code| code.to_ascii_lowercase());
+    let error_code = error_code.map(str::to_ascii_lowercase);
     if matches!(error_code.as_deref(), Some("nosuchcorsconfiguration")) {
         return true;
     }
@@ -710,7 +710,7 @@ fn is_missing_bucket_encryption_response(
     status_code: Option<u16>,
     error_text: &str,
 ) -> bool {
-    let error_code = error_code.map(|code| code.to_ascii_lowercase());
+    let error_code = error_code.map(str::to_ascii_lowercase);
     if matches!(
         error_code.as_deref(),
         Some("serversideencryptionconfigurationnotfounderror" | "nosuchbucketencryption")
@@ -725,6 +725,10 @@ fn is_missing_bucket_encryption_response(
     status_code.is_none_or(|status| status == 404)
 }
 
+#[allow(
+    clippy::expect_used,
+    reason = "hard-coded SSE builder values satisfy the generated SDK invariants"
+)]
 fn core_bucket_encryption_to_sdk(
     value: &BucketEncryption,
 ) -> aws_sdk_s3::types::ServerSideEncryptionConfiguration {
@@ -1079,11 +1083,13 @@ fn requested_sha256_checksum(
 fn validate_sha256_checksum_request(request: Option<&ChecksumRequest>) -> Result<()> {
     match request {
         None
-        | Some(ChecksumRequest::Calculate(ChecksumAlgorithm::Sha256))
-        | Some(ChecksumRequest::Precomputed(ObjectChecksum {
-            algorithm: ChecksumAlgorithm::Sha256,
-            ..
-        })) => Ok(()),
+        | Some(
+            ChecksumRequest::Calculate(ChecksumAlgorithm::Sha256)
+            | ChecksumRequest::Precomputed(ObjectChecksum {
+                algorithm: ChecksumAlgorithm::Sha256,
+                ..
+            }),
+        ) => Ok(()),
         Some(_) => Err(Error::UnsupportedFeature(
             "RustFS beta.10 checksum writes currently support SHA-256 only".to_string(),
         )),
@@ -1302,7 +1308,7 @@ fn core_bucket_lock_configuration(
 ) -> Result<BucketObjectLockConfiguration> {
     let enabled = match configuration
         .object_lock_enabled()
-        .map(|value| value.as_str())
+        .map(aws_sdk_s3::types::ObjectLockEnabled::as_str)
     {
         Some("Enabled") => true,
         None => false,
@@ -1570,7 +1576,7 @@ impl HttpConnector for ReqwestConnector {
             };
 
             // Build reqwest method
-            let method = reqwest::Method::from_bytes(method_str.as_bytes())
+            let method = Method::from_bytes(method_str.as_bytes())
                 .map_err(|e| ConnectorError::user(Box::new(e)))?;
 
             // Build reqwest URL
@@ -1580,10 +1586,10 @@ impl HttpConnector for ReqwestConnector {
             let mut req = reqwest::Request::new(method, url);
 
             // Copy headers; S3 headers are all ASCII so failures here are unexpected
-            for (name, value) in headers.iter() {
+            for (name, value) in &headers {
                 match (
-                    reqwest::header::HeaderName::from_bytes(name.as_bytes()),
-                    reqwest::header::HeaderValue::from_bytes(value.as_bytes()),
+                    HeaderName::from_bytes(name.as_bytes()),
+                    HeaderValue::from_bytes(value.as_bytes()),
                 ) {
                     (Ok(header_name), Ok(header_value)) => {
                         req.headers_mut().append(header_name, header_value);
@@ -1672,7 +1678,7 @@ impl Intercept for CustomHeaderInterceptor {
             request
                 .headers_mut()
                 .try_insert(header.name.clone(), header.value.clone())
-                .map_err(|error| Box::new(error) as BoxError)?;
+                .map_err(BoxError::from)?;
         }
         Ok(())
     }
@@ -1694,7 +1700,7 @@ impl S3Client {
         if alias.anonymous {
             config_loader = config_loader.no_credentials();
         } else {
-            let credentials = aws_credential_types::Credentials::new(
+            let credentials = Credentials::new(
                 access_key,
                 secret_key,
                 None, // session token
@@ -1868,14 +1874,11 @@ impl S3Client {
                 let status = service_error.raw().status().as_u16();
                 let code = service_error.err().code();
                 if matches!(status, 401 | 403)
-                    || matches!(
-                        code,
-                        Some("AccessDenied") | Some("Forbidden") | Some("Unauthorized")
-                    )
+                    || matches!(code, Some("AccessDenied" | "Forbidden" | "Unauthorized"))
                 {
                     return Error::Auth(formatted);
                 }
-                if status == 404 || matches!(code, Some("NotFound") | Some("NoSuchBucket")) {
+                if status == 404 || matches!(code, Some("NotFound" | "NoSuchBucket")) {
                     return Error::NotFound(format!("Bucket not found: {}", path.bucket));
                 }
             }
@@ -2206,7 +2209,7 @@ impl S3Client {
             .e_tag()
             .map(|etag| etag.trim_matches('"').to_string());
         info.version_id = response.version_id().map(ToString::to_string);
-        info.last_modified = Some(jiff::Timestamp::now());
+        info.last_modified = Some(Timestamp::now());
         Ok(info)
     }
 
@@ -2435,14 +2438,14 @@ impl S3Client {
                 format!("Service error: {err} ({})", details.join(", "))
             }
             aws_sdk_s3::error::SdkError::ConstructionFailure(err) => {
-                format!("Request construction failed: {:?}", err)
+                format!("Request construction failed: {err:?}")
             }
             aws_sdk_s3::error::SdkError::TimeoutError(_) => "Request timeout".to_string(),
             aws_sdk_s3::error::SdkError::DispatchFailure(err) => {
-                format!("Network dispatch error: {:?}", err)
+                format!("Network dispatch error: {err:?}")
             }
             aws_sdk_s3::error::SdkError::ResponseError(err) => {
-                format!("Response error: {:?}", err)
+                format!("Response error: {err:?}")
             }
             _ => error.to_string(),
         }
@@ -2471,7 +2474,7 @@ impl S3Client {
                     "The S3 endpoint rejected the requested storage class".to_string(),
                 );
             }
-            if matches!(code, Some("BadDigest") | Some("InvalidDigest")) {
+            if matches!(code, Some("BadDigest" | "InvalidDigest")) {
                 return Error::Conflict(
                     "The S3 endpoint rejected the supplied object checksum".to_string(),
                 );
@@ -2479,7 +2482,7 @@ impl S3Client {
             if matches!(status, 409 | 412)
                 || matches!(
                     code,
-                    Some("ConditionalRequestConflict") | Some("PreconditionFailed")
+                    Some("ConditionalRequestConflict" | "PreconditionFailed")
                 )
             {
                 return Error::Conflict(formatted);
@@ -2506,7 +2509,7 @@ impl S3Client {
                 };
             }
 
-            if matches!(code, Some("AccessDenied") | Some("Forbidden")) || status == 403 {
+            if matches!(code, Some("AccessDenied" | "Forbidden")) || status == 403 {
                 return Error::Auth(formatted);
             }
 
@@ -2522,7 +2525,7 @@ impl S3Client {
 
             if matches!(code, Some("NoSuchVersion"))
                 || (requested_version.is_some()
-                    && (matches!(code, Some("NoSuchKey") | Some("NotFound")) || status == 404))
+                    && (matches!(code, Some("NoSuchKey" | "NotFound")) || status == 404))
             {
                 return Error::VersionNotFound {
                     path: path.to_string(),
@@ -2530,7 +2533,7 @@ impl S3Client {
                 };
             }
 
-            if matches!(code, Some("NoSuchKey") | Some("NotFound")) || status == 404 {
+            if matches!(code, Some("NoSuchKey" | "NotFound")) || status == 404 {
                 return Error::NotFound(path.to_string());
             }
         }
@@ -2592,7 +2595,7 @@ impl S3Client {
                 );
             }
             if matches!(code, Some("ObjectLockConfigurationNotFoundError"))
-                || (matches!(code, Some("InvalidRequest") | Some("InvalidBucketState"))
+                || (matches!(code, Some("InvalidRequest" | "InvalidBucketState"))
                     && message.contains("object lock")
                     && (message.contains("not enabled")
                         || message.contains("not configured")
@@ -2604,10 +2607,7 @@ impl S3Client {
             }
             if status == 401
                 || status == 403
-                || matches!(
-                    code,
-                    Some("Unauthorized") | Some("AccessDenied") | Some("Forbidden")
-                )
+                || matches!(code, Some("Unauthorized" | "AccessDenied" | "Forbidden"))
             {
                 return Error::Auth(formatted);
             }
@@ -2667,17 +2667,14 @@ impl S3Client {
             }
             if status == 401
                 || status == 403
-                || matches!(
-                    code,
-                    Some("Unauthorized") | Some("AccessDenied") | Some("Forbidden")
-                )
+                || matches!(code, Some("Unauthorized" | "AccessDenied" | "Forbidden"))
             {
                 return Error::Auth(formatted);
             }
             if status == 404 || matches!(code, Some("NoSuchBucket")) {
                 return Error::NotFound(format!("Bucket not found: {bucket}"));
             }
-            if matches!(code, Some("InvalidRequest") | Some("InvalidBucketState")) {
+            if matches!(code, Some("InvalidRequest" | "InvalidBucketState")) {
                 return Error::Conflict(formatted);
             }
         }
@@ -2807,7 +2804,7 @@ impl S3Client {
             }
         } else if matches!(
             code.as_deref(),
-            Some("InvalidRequest") | Some("InvalidBucketState")
+            Some("InvalidRequest" | "InvalidBucketState")
         ) {
             match error {
                 Error::Network(message) => Error::Conflict(message),
@@ -3017,8 +3014,7 @@ impl S3Client {
             .is_some_and(|length| length > REPLICATION_EXTENSION_BODY_LIMIT)
         {
             return Err(Error::General(format!(
-                "Replication response exceeds the {} byte limit",
-                REPLICATION_EXTENSION_BODY_LIMIT
+                "Replication response exceeds the {REPLICATION_EXTENSION_BODY_LIMIT} byte limit"
             )));
         }
 
@@ -3030,8 +3026,7 @@ impl S3Client {
             let next_len = bytes.len().saturating_add(chunk.len());
             if next_len as u64 > REPLICATION_EXTENSION_BODY_LIMIT {
                 return Err(Error::General(format!(
-                    "Replication response exceeds the {} byte limit",
-                    REPLICATION_EXTENSION_BODY_LIMIT
+                    "Replication response exceeds the {REPLICATION_EXTENSION_BODY_LIMIT} byte limit"
                 )));
             }
             bytes.extend_from_slice(&chunk);
@@ -3197,10 +3192,10 @@ impl S3Client {
     fn parse_replication_timestamp(
         value: Option<String>,
         field: &str,
-    ) -> Result<Option<jiff::Timestamp>> {
+    ) -> Result<Option<Timestamp>> {
         value
             .map(|value| {
-                jiff::Timestamp::from_str(&value).map_err(|error| {
+                Timestamp::from_str(&value).map_err(|error| {
                     Error::General(format!("Malformed replication {field}: {error}"))
                 })
             })
@@ -3555,10 +3550,10 @@ impl S3Client {
         status_code: Option<u16>,
         error_text: &str,
     ) -> BucketPolicyErrorKind {
-        let error_code = error_code.map(|code| code.to_ascii_lowercase());
+        let error_code = error_code.map(str::to_ascii_lowercase);
         if matches!(
             error_code.as_deref(),
-            Some("nosuchbucketpolicy") | Some("nosuchpolicy")
+            Some("nosuchbucketpolicy" | "nosuchpolicy")
         ) {
             return BucketPolicyErrorKind::MissingPolicy;
         }
@@ -3620,7 +3615,7 @@ impl S3Client {
 
         if let Some(key_filter) = filter.and_then(|value| value.key()) {
             for rule in key_filter.filter_rules() {
-                match rule.name().map(|name| name.as_str()) {
+                match rule.name().map(aws_sdk_s3::types::FilterRuleName::as_str) {
                     Some("prefix") => {
                         prefix = rule.value().map(ToString::to_string);
                     }
@@ -3835,7 +3830,7 @@ impl S3Client {
             info.etag = Some(etag.trim_matches('"').to_string());
         }
         info.version_id = response.version_id().map(ToString::to_string);
-        info.last_modified = Some(jiff::Timestamp::now());
+        info.last_modified = Some(Timestamp::now());
         info.storage_class = options.write.storage_class.clone();
 
         if let Some(checksum) = requested_checksum {
@@ -4038,15 +4033,14 @@ impl S3Client {
                 }
             }
 
-            let etag = match upload_part_response.e_tag() {
-                Some(value) => value.trim_matches('"').to_string(),
-                None => {
-                    let primary =
-                        Error::General(format!("missing ETag for multipart part {part_number}"));
-                    return Err(self
-                        .abort_multipart_upload_with_error(path, &upload_id, primary)
-                        .await);
-                }
+            let etag = if let Some(value) = upload_part_response.e_tag() {
+                value.trim_matches('"').to_string()
+            } else {
+                let primary =
+                    Error::General(format!("missing ETag for multipart part {part_number}"));
+                return Err(self
+                    .abort_multipart_upload_with_error(path, &upload_id, primary)
+                    .await);
             };
 
             completed_parts.push({
@@ -4111,7 +4105,7 @@ impl S3Client {
             info.etag = Some(etag.trim_matches('"').to_string());
         }
         info.version_id = complete_response.version_id().map(ToString::to_string);
-        info.last_modified = Some(jiff::Timestamp::now());
+        info.last_modified = Some(Timestamp::now());
 
         if checksum_requested {
             let expected_checksum = composite_sha256_checksum(&part_digests);
@@ -4312,7 +4306,10 @@ impl S3Client {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "multipart copy needs all S3 request fields"
+    )]
     async fn finish_multipart_copy(
         &self,
         src: &RemotePath,
@@ -4453,7 +4450,7 @@ impl S3Client {
         object.content_type = attributes.content_type.clone();
         object.metadata =
             (!attributes.user_metadata.is_empty()).then(|| attributes.user_metadata.clone());
-        object.last_modified = Some(jiff::Timestamp::now());
+        object.last_modified = Some(Timestamp::now());
 
         Ok(MultipartCopyResult {
             object,
@@ -4464,13 +4461,14 @@ impl S3Client {
     }
 }
 
-fn build_tagging(
-    tags: std::collections::HashMap<String, String>,
-) -> Result<aws_sdk_s3::types::Tagging> {
+fn build_tagging(tags: HashMap<String, String>) -> Result<aws_sdk_s3::types::Tagging> {
     use aws_sdk_s3::types::{Tag, Tagging};
 
-    let mut tag_set = Vec::with_capacity(tags.len());
-    for (key, value) in tags {
+    let mut entries: Vec<(String, String)> = tags.into_iter().collect();
+    entries.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+
+    let mut tag_set = Vec::with_capacity(entries.len());
+    for (key, value) in entries {
         let tag = Tag::builder()
             .key(key)
             .value(value)
@@ -4644,7 +4642,7 @@ impl ObjectStore for S3Client {
             .map(|b| {
                 let mut info = ObjectInfo::bucket(b.name().unwrap_or_default());
                 if let Some(creation_date) = b.creation_date() {
-                    info.last_modified = jiff::Timestamp::from_second(creation_date.secs()).ok();
+                    info.last_modified = Timestamp::from_second(creation_date.secs()).ok();
                 }
                 info
             })
@@ -4660,7 +4658,7 @@ impl ObjectStore for S3Client {
         let prefix = if path.key.is_empty() {
             options.prefix.clone()
         } else if let Some(p) = &options.prefix {
-            Some(format!("{}{}", path.key, p))
+            Some(format!("{}{p}", path.key))
         } else {
             Some(path.key.clone())
         };
@@ -4713,7 +4711,7 @@ impl ObjectStore for S3Client {
             let mut info = ObjectInfo::file(&key, size);
 
             if let Some(modified) = object.last_modified() {
-                info.last_modified = jiff::Timestamp::from_second(modified.secs()).ok();
+                info.last_modified = Timestamp::from_second(modified.secs()).ok();
             }
 
             if let Some(etag) = object.e_tag() {
@@ -4775,7 +4773,7 @@ impl ObjectStore for S3Client {
                 if status == 501 || matches!(code, Some("NotImplemented")) {
                     return Error::UnsupportedFeature(message);
                 }
-                if status == 404 || matches!(code, Some("NoSuchBucket") | Some("NotFound")) {
+                if status == 404 || matches!(code, Some("NoSuchBucket" | "NotFound")) {
                     return Error::NotFound(format!("Bucket not found: {bucket}"));
                 }
                 return Error::Network(format!("{message} (HTTP {status})"));
@@ -4876,7 +4874,7 @@ impl ObjectStore for S3Client {
                     if status == 501 || matches!(code, Some("NotImplemented")) {
                         return Err(Error::UnsupportedFeature(message));
                     }
-                    if status == 404 || matches!(code, Some("NoSuchBucket") | Some("NotFound")) {
+                    if status == 404 || matches!(code, Some("NoSuchBucket" | "NotFound")) {
                         return Err(Error::NotFound(format!(
                             "Multipart upload target not found: {}/{}",
                             request.bucket, request.key
@@ -4922,7 +4920,7 @@ impl ObjectStore for S3Client {
         let mut info = ObjectInfo::file(&path.key, size);
 
         if let Some(modified) = response.last_modified() {
-            info.last_modified = jiff::Timestamp::from_second(modified.secs()).ok();
+            info.last_modified = Timestamp::from_second(modified.secs()).ok();
         }
 
         if let Some(etag) = response.e_tag() {
@@ -4987,7 +4985,7 @@ impl ObjectStore for S3Client {
         let mut info = ObjectInfo::file(&path.key, response.content_length().unwrap_or(0));
         info.last_modified = response
             .last_modified()
-            .and_then(|value| jiff::Timestamp::from_second(value.secs()).ok());
+            .and_then(|value| Timestamp::from_second(value.secs()).ok());
         info.etag = response
             .e_tag()
             .map(|value| value.trim_matches('"').to_string());
@@ -5119,17 +5117,14 @@ impl ObjectStore for S3Client {
                 if matches!(status, 401 | 403)
                     || matches!(
                         code,
-                        Some("AccessDenied")
-                            | Some("InvalidAccessKeyId")
-                            | Some("Forbidden")
-                            | Some("Unauthorized")
+                        Some("AccessDenied" | "InvalidAccessKeyId" | "Forbidden" | "Unauthorized")
                     )
                 {
                     Error::Auth(formatted)
                 } else if status == 409
                     || matches!(
                         code,
-                        Some("BucketAlreadyExists") | Some("BucketAlreadyOwnedByYou")
+                        Some("BucketAlreadyExists" | "BucketAlreadyOwnedByYou")
                     )
                 {
                     Error::Conflict(formatted)
@@ -5187,15 +5182,10 @@ impl ObjectStore for S3Client {
                     let status = service_error.raw().status().as_u16();
                     let code = service_error.err().code();
                     if matches!(status, 401 | 403)
-                        || matches!(
-                            code,
-                            Some("AccessDenied") | Some("Forbidden") | Some("Unauthorized")
-                        )
+                        || matches!(code, Some("AccessDenied" | "Forbidden" | "Unauthorized"))
                     {
                         Error::Auth(err_str)
-                    } else if status == 404
-                        || matches!(code, Some("NotFound") | Some("NoSuchBucket"))
-                    {
+                    } else if status == 404 || matches!(code, Some("NotFound" | "NoSuchBucket")) {
                         Error::NotFound(format!("Bucket not found: {bucket}"))
                     } else if status == 409 || matches!(code, Some("BucketNotEmpty")) {
                         Error::Conflict(err_str)
@@ -5388,7 +5378,7 @@ impl ObjectStore for S3Client {
             info.etag = Some(etag.trim_matches('"').to_string());
         }
         info.version_id = response.version_id().map(ToString::to_string);
-        info.last_modified = Some(jiff::Timestamp::now());
+        info.last_modified = Some(Timestamp::now());
 
         Ok(info)
     }
@@ -5443,7 +5433,7 @@ impl ObjectStore for S3Client {
             .e_tag()
             .map(|etag| etag.trim_matches('"').to_string());
         info.version_id = response.version_id().map(ToString::to_string);
-        info.last_modified = Some(jiff::Timestamp::now());
+        info.last_modified = Some(Timestamp::now());
         if let Some(requested_checksum) = requested_checksum {
             self.verify_persisted_sha256(
                 path,
@@ -5757,7 +5747,7 @@ impl ObjectStore for S3Client {
 
     async fn presign_get(&self, path: &RemotePath, expires_secs: u64) -> Result<String> {
         let config = aws_sdk_s3::presigning::PresigningConfig::builder()
-            .expires_in(std::time::Duration::from_secs(expires_secs))
+            .expires_in(Duration::from_secs(expires_secs))
             .build()
             .map_err(|e| Error::General(format!("presign_get config: {e}")))?;
 
@@ -5780,7 +5770,7 @@ impl ObjectStore for S3Client {
         content_type: Option<&str>,
     ) -> Result<String> {
         let config = aws_sdk_s3::presigning::PresigningConfig::builder()
-            .expires_in(std::time::Duration::from_secs(expires_secs))
+            .expires_in(Duration::from_secs(expires_secs))
             .build()
             .map_err(|e| Error::General(format!("presign_put config: {e}")))?;
 
@@ -5861,8 +5851,10 @@ impl ObjectStore for S3Client {
                     if raw.status().as_u16() == 404
                         && matches!(
                             code,
-                            Some("ObjectLockConfigurationNotFoundError")
-                                | Some("NoSuchObjectLockConfiguration")
+                            Some(
+                                "ObjectLockConfigurationNotFoundError"
+                                    | "NoSuchObjectLockConfiguration"
+                            )
                         )
                     {
                         return Ok(None);
@@ -5996,7 +5988,7 @@ impl ObjectStore for S3Client {
         let status = response
             .legal_hold()
             .and_then(|legal_hold| legal_hold.status())
-            .map(|status| status.as_str());
+            .map(aws_sdk_s3::types::ObjectLockLegalHoldStatus::as_str);
         let result = match status {
             Some("ON") => Ok(LegalHoldStatus::On),
             Some("OFF") => Ok(LegalHoldStatus::Off),
@@ -6154,10 +6146,7 @@ impl ObjectStore for S3Client {
         .await
     }
 
-    async fn get_object_tags(
-        &self,
-        path: &RemotePath,
-    ) -> Result<std::collections::HashMap<String, String>> {
+    async fn get_object_tags(&self, path: &RemotePath) -> Result<HashMap<String, String>> {
         let response = match self
             .inner
             .get_object_tagging()
@@ -6169,13 +6158,13 @@ impl ObjectStore for S3Client {
             Ok(response) => response,
             Err(e) => {
                 if e.to_string().contains("NoSuchTagSet") {
-                    return Ok(std::collections::HashMap::new());
+                    return Ok(HashMap::new());
                 }
                 return Err(Error::General(format!("get_object_tags: {e}")));
             }
         };
 
-        let mut tags = std::collections::HashMap::new();
+        let mut tags = HashMap::new();
         for tag in response.tag_set() {
             let key = tag.key();
             let value = tag.value();
@@ -6185,21 +6174,18 @@ impl ObjectStore for S3Client {
         Ok(tags)
     }
 
-    async fn get_bucket_tags(
-        &self,
-        bucket: &str,
-    ) -> Result<std::collections::HashMap<String, String>> {
+    async fn get_bucket_tags(&self, bucket: &str) -> Result<HashMap<String, String>> {
         let response = match self.inner.get_bucket_tagging().bucket(bucket).send().await {
             Ok(response) => response,
             Err(e) => {
                 if e.to_string().contains("NoSuchTagSet") {
-                    return Ok(std::collections::HashMap::new());
+                    return Ok(HashMap::new());
                 }
                 return Err(Error::General(format!("get_bucket_tags: {e}")));
             }
         };
 
-        let mut tags = std::collections::HashMap::new();
+        let mut tags = HashMap::new();
         for tag in response.tag_set() {
             let key = tag.key();
             let value = tag.value();
@@ -6212,7 +6198,7 @@ impl ObjectStore for S3Client {
     async fn set_object_tags(
         &self,
         path: &RemotePath,
-        tags: std::collections::HashMap<String, String>,
+        tags: HashMap<String, String>,
     ) -> Result<()> {
         let tagging = build_tagging(tags)?;
 
@@ -6228,11 +6214,7 @@ impl ObjectStore for S3Client {
         Ok(())
     }
 
-    async fn set_bucket_tags(
-        &self,
-        bucket: &str,
-        tags: std::collections::HashMap<String, String>,
-    ) -> Result<()> {
+    async fn set_bucket_tags(&self, bucket: &str, tags: HashMap<String, String>) -> Result<()> {
         let tagging = build_tagging(tags)?;
 
         self.inner
@@ -6289,7 +6271,7 @@ impl ObjectStore for S3Client {
             }
         };
 
-        Ok(response.policy().map(|policy| policy.to_string()))
+        Ok(response.policy().map(ToString::to_string))
     }
 
     async fn set_bucket_policy(&self, bucket: &str, policy: &str) -> Result<()> {
@@ -6764,10 +6746,11 @@ impl ObjectStore for S3Client {
                 response.targets.len()
             )));
         }
-        let target = response
-            .targets
-            .pop()
-            .expect("one target was verified before removing it");
+        let Some(target) = response.targets.pop() else {
+            return Err(Error::General(
+                "Malformed replication start response: expected one target".to_string(),
+            ));
+        };
         if target.arn.is_empty() || target.reset_id.is_empty() {
             return Err(Error::General(
                 "Malformed replication start response: missing ARN or reset ID".to_string(),
@@ -7724,7 +7707,7 @@ mod tests {
 
     #[tokio::test]
     async fn lifecycle_get_retries_transient_failure() {
-        let success_body = br#"<LifecycleConfiguration><Rule><ID>retry</ID><Status>Enabled</Status></Rule></LifecycleConfiguration>"#;
+        let success_body = br"<LifecycleConfiguration><Rule><ID>retry</ID><Status>Enabled</Status></Rule></LifecycleConfiguration>";
         let first = b"<Error><Code>InternalError</Code></Error>";
         let first_response = format!(
             "HTTP/1.1 500 Internal Server Error\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
@@ -7766,7 +7749,7 @@ mod tests {
 
     #[tokio::test]
     async fn lifecycle_get_retries_dropped_connection() {
-        let success_body = br#"<LifecycleConfiguration><Rule><ID>network-retry</ID><Status>Enabled</Status></Rule></LifecycleConfiguration>"#;
+        let success_body = br"<LifecycleConfiguration><Rule><ID>network-retry</ID><Status>Enabled</Status></Rule></LifecycleConfiguration>";
         let success_response = format!(
             "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
             success_body.len()
@@ -8205,7 +8188,7 @@ mod tests {
             "NoSuchBucket",
         ) {
             Err(Error::NotFound(message)) => assert!(message.contains("Bucket not found")),
-            other => panic!("Expected NotFound for missing bucket, got: {:?}", other),
+            other => panic!("Expected NotFound for missing bucket, got: {other:?}"),
         }
 
         let delete_missing_policy = S3Client::map_delete_bucket_policy_error(
@@ -8446,7 +8429,7 @@ mod tests {
             .expect("set bucket cors");
 
         let request = request_receiver.expect_request();
-        assert_eq!(request.method(), http::Method::PUT);
+        assert_eq!(request.method(), Method::PUT);
         assert!(
             request.uri().to_string().contains("?cors"),
             "expected bucket CORS subresource in URI: {}",
@@ -8489,7 +8472,7 @@ mod tests {
         assert_eq!(encryption, Some(BucketEncryption::SseS3));
 
         let request = request_receiver.expect_request();
-        assert_eq!(request.method(), http::Method::GET);
+        assert_eq!(request.method(), Method::GET);
         assert!(
             request.uri().to_string().contains("?encryption"),
             "expected bucket encryption subresource in URI: {}",
@@ -8538,7 +8521,7 @@ mod tests {
 
         match client.get_bucket_encryption("bucket").await {
             Err(Error::General(message)) => {
-                assert!(message.contains("missing bucket encryption rule"))
+                assert!(message.contains("missing bucket encryption rule"));
             }
             other => panic!("expected missing rule error, got {other:?}"),
         }
@@ -8563,7 +8546,7 @@ mod tests {
             .expect("set bucket encryption");
 
         let request = request_receiver.expect_request();
-        assert_eq!(request.method(), http::Method::PUT);
+        assert_eq!(request.method(), Method::PUT);
         assert!(
             request.uri().to_string().contains("?encryption"),
             "expected bucket encryption subresource in URI: {}",
@@ -8612,7 +8595,7 @@ mod tests {
             .expect("delete bucket encryption");
 
         let request = request_receiver.expect_request();
-        assert_eq!(request.method(), http::Method::DELETE);
+        assert_eq!(request.method(), Method::DELETE);
         assert!(
             request.uri().to_string().contains("?encryption"),
             "expected bucket encryption subresource in URI: {}",
@@ -8877,7 +8860,7 @@ mod tests {
                     "Unexpected error message: {msg}"
                 );
             }
-            other => panic!("Expected Error::Network for invalid path, got: {:?}", other),
+            other => panic!("Expected Error::Network for invalid path, got: {other:?}"),
         }
     }
 
@@ -10566,7 +10549,7 @@ mod tests {
                 content_encoding: Some("gzip".to_string()),
                 content_language: Some("en".to_string()),
                 expires: Some(
-                    jiff::Timestamp::from_second(1_774_515_600).expect("valid expiry timestamp"),
+                    Timestamp::from_second(1_774_515_600).expect("valid expiry timestamp"),
                 ),
                 user_metadata: HashMap::from([("owner".to_string(), "storage".to_string())]),
             }),
@@ -12057,7 +12040,7 @@ mod tests {
         let src = RemotePath::new("test", "source-bucket", "dir one/a+b?#.bin");
         let dst = RemotePath::new("test", "destination-bucket", "dst.txt");
         let options = multipart_copy_options(source_size);
-        let progress = std::sync::Mutex::new(Vec::new());
+        let progress = Mutex::new(Vec::new());
 
         let result = client
             .multipart_copy(
@@ -12774,7 +12757,7 @@ mod tests {
 
         match result {
             Err(Error::NotFound(message)) => {
-                assert_eq!(message, "Bucket not found: missing-bucket")
+                assert_eq!(message, "Bucket not found: missing-bucket");
             }
             other => panic!("Expected NotFound for missing bucket, got: {other:?}"),
         }
@@ -12800,7 +12783,7 @@ mod tests {
 
         match result {
             Err(Error::NotFound(message)) => {
-                assert_eq!(message, "Bucket not found: missing-bucket")
+                assert_eq!(message, "Bucket not found: missing-bucket");
             }
             other => panic!("Expected NotFound for NotFound list versions error, got: {other:?}"),
         }
@@ -13027,7 +13010,7 @@ mod tests {
 
         assert_eq!(location.as_deref(), Some("eu-west-1"));
         let request = request_receiver.expect_request();
-        assert_eq!(request.method(), http::Method::GET);
+        assert_eq!(request.method(), Method::GET);
         assert!(request.uri().contains("?location"));
     }
 
@@ -13073,7 +13056,7 @@ mod tests {
 
         match result {
             Err(Error::NotFound(message)) => {
-                assert_eq!(message, "Bucket not found: missing-bucket")
+                assert_eq!(message, "Bucket not found: missing-bucket");
             }
             other => panic!("Expected NotFound for missing bucket, got: {other:?}"),
         }
@@ -13098,7 +13081,7 @@ mod tests {
 
         match result {
             Err(Error::NotFound(message)) => {
-                assert_eq!(message, "Bucket not found: missing-bucket")
+                assert_eq!(message, "Bucket not found: missing-bucket");
             }
             other => panic!("Expected NotFound for NotFound delete bucket error, got: {other:?}"),
         }

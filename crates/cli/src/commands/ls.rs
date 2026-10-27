@@ -10,7 +10,7 @@ use rc_core::{
 };
 use rc_s3::S3Client;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::exit_code::ExitCode;
 use crate::output::{Formatter, OutputConfig};
@@ -92,7 +92,7 @@ struct VersionSummary {
 }
 
 /// Execute the ls command
-pub async fn execute(args: LsArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: LsArgs, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
 
     if args.incomplete {
@@ -117,12 +117,11 @@ pub async fn execute(args: LsArgs, output_config: OutputConfig) -> ExitCode {
         }
     };
 
-    let alias = match alias_manager.get(&alias_name) {
-        Ok(a) => a,
-        Err(_) => {
-            formatter.error(&format!("Alias '{alias_name}' not found"));
-            return ExitCode::NotFound;
-        }
+    let alias = if let Ok(a) = alias_manager.get(&alias_name) {
+        a
+    } else {
+        formatter.error(&format!("Alias '{alias_name}' not found"));
+        return ExitCode::NotFound;
     };
 
     // Create S3 client
@@ -351,12 +350,11 @@ async fn list_object_versions(
                         .unwrap_or_default();
 
                     formatter.println(&format!(
-                        "{latest} {:<40} {:>10} {:>12}{marker}",
+                        "{latest} {:<40} {:>10} {size:>12}{marker}",
                         formatter.sanitize_text(&version.key),
                         formatter.sanitize_text(
                             &version.version_id.chars().take(10).collect::<String>()
-                        ),
-                        size
+                        )
                     ));
                 }
 
@@ -579,7 +577,7 @@ async fn list_objects(
                 formatter.println(&format!("{styled_date} {styled_size} {styled_name}"));
             } else {
                 let size = item.size_human.clone().unwrap_or_else(|| "0 B".to_string());
-                let styled_size = formatter.style_size(&format!("{:>10}", size));
+                let styled_size = formatter.style_size(&format!("{size:>10}"));
                 let styled_name = formatter.style_file(&item.key);
                 formatter.println(&format!("{styled_date} {styled_size} {styled_name}"));
             }
@@ -618,7 +616,7 @@ async fn list_all_objects(
         ..Default::default()
     };
 
-    let mut all_items: HashMap<&str, Vec<ObjectInfo>> = HashMap::new();
+    let mut all_items: BTreeMap<&str, Vec<ObjectInfo>> = BTreeMap::new();
     let mut is_truncated = false;
     let mut continuation_token: Option<String> = None;
 
@@ -639,6 +637,13 @@ async fn list_all_objects(
         all_items.entry(&bucket.key).or_default().extend(new_items);
     }
 
+    // Server listing order is not part of the output contract. Sort each
+    // bucket before either JSON or human rendering so the same response set
+    // produces the same bytes.
+    for objects in all_items.values_mut() {
+        objects.sort_by(|left, right| left.key.cmp(&right.key));
+    }
+
     // Calculate summary
     let total_objects = all_items.values().flatten().filter(|i| !i.is_dir).count();
     let total_size = all_items
@@ -653,7 +658,7 @@ async fn list_all_objects(
                 .into_iter()
                 .flat_map(|(bucket, objects)| {
                     objects.into_iter().map(move |mut obj| {
-                        obj.key = format!("{}/{}", bucket, obj.key);
+                        obj.key = format!("{bucket}/{}", obj.key);
                         obj
                     })
                 })
@@ -688,13 +693,13 @@ async fn list_all_objects(
                     if item.is_dir {
                         let styled_size = formatter.style_size(&format!("{:>10}", "0B"));
                         let styled_name =
-                            formatter.style_dir(&format!("{}/{}", bucket_name, item.key));
+                            formatter.style_dir(&format!("{bucket_name}/{}", item.key));
                         formatter.println(&format!("{styled_date} {styled_size} {styled_name}"));
                     } else {
                         let size = item.size_human.clone().unwrap_or_else(|| "0 B".to_string());
-                        let styled_size = formatter.style_size(&format!("{:>10}", size));
+                        let styled_size = formatter.style_size(&format!("{size:>10}"));
                         let styled_name =
-                            formatter.style_file(&format!("{}/{}", bucket_name, item.key));
+                            formatter.style_file(&format!("{bucket_name}/{}", item.key));
                         formatter.println(&format!("{styled_date} {styled_size} {styled_name}"));
                     }
                 }

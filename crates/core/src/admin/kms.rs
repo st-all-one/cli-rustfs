@@ -351,7 +351,10 @@ fn validate_vault_transit_configuration(
     validate_optional_text("Default KMS key id", request.default_key_id.as_deref())
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Vault wire fields are validated together"
+)]
 fn validate_vault_configuration(
     backend: &str,
     address: &str,

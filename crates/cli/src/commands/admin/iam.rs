@@ -169,7 +169,7 @@ struct ValidatedArchive {
     version: u8,
 }
 
-pub async fn execute(command: IamCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(command: IamCommands, formatter: &Formatter) -> ExitCode {
     match command {
         IamCommands::Export(args) => execute_export(args, formatter).await,
         IamCommands::Import(args) => execute_import(args, formatter).await,
@@ -222,10 +222,9 @@ async fn execute_export_with_api(
         formatter.json(&output);
     } else {
         formatter.println(&format!(
-            "IAM archive exported securely (version {}, {} entities, {} bytes)",
+            "IAM archive exported securely (version {}, {} entities, {bytes} bytes)",
             archive.version,
-            inventory_entry_count(&archive.inventory),
-            bytes
+            inventory_entry_count(&archive.inventory)
         ));
     }
     Ok(())
@@ -324,9 +323,8 @@ async fn execute_import_with_api(
         formatter.json(&output);
     } else if args.dry_run {
         formatter.println(&format!(
-            "IAM archive validated; dry-run made no changes ({} entities, {} conflicts)",
-            inventory_entry_count(&archive.inventory),
-            conflict_count
+            "IAM archive validated; dry-run made no changes ({} entities, {conflict_count} conflicts)",
+            inventory_entry_count(&archive.inventory)
         ));
     } else if let Some(summary) = output.data.result {
         formatter.println(&format!(
@@ -446,7 +444,10 @@ fn canonicalize_archive(raw: &[u8]) -> Result<ValidatedArchive> {
         let mut entry = zip.by_index(index).map_err(|_| {
             Error::InvalidPath("IAM archive contains an unreadable entry".to_string())
         })?;
-        let name = entry.name().to_string();
+        let name = entry
+            .name()
+            .map_err(|_| Error::InvalidPath("IAM archive entry has no valid name".to_string()))?
+            .to_string();
         if !allowed.contains(name.as_str()) || entry.is_dir() || !seen.insert(name.clone()) {
             return Err(Error::InvalidPath(
                 "IAM archive contains an unexpected, duplicate, or directory entry".to_string(),

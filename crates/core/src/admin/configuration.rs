@@ -203,7 +203,7 @@ fn parse_directives(input: &str, allow_bare_keys: bool) -> Result<Vec<ParsedDire
             entries.push((key.to_string(), value));
         }
         directives.push(ParsedDirective {
-            scope: scope.to_string(),
+            scope: scope.clone(),
             entries,
         });
     }
@@ -313,9 +313,7 @@ fn redact_config_line(line: &str) -> Option<String> {
     }
     match parse_directives(trimmed, true) {
         Ok(mut directives) if directives.len() == 1 => {
-            let directive = directives
-                .pop()
-                .expect("one parsed directive was checked above");
+            let directive = directives.pop()?;
             let entries = directive
                 .entries
                 .into_iter()

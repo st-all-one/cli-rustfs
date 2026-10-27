@@ -144,7 +144,7 @@ pub enum AdminCommands {
 }
 
 /// Execute an admin subcommand
-pub async fn execute(cmd: AdminCommands, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(cmd: AdminCommands, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
 
     match cmd {
@@ -272,7 +272,10 @@ fn normalize_admin_alias(alias_name: &str) -> &str {
 }
 
 /// Helper to get AdminClient from an alias name
-pub fn get_admin_client(alias_name: &str, formatter: &Formatter) -> Result<AdminClient, ExitCode> {
+pub(super) fn get_admin_client(
+    alias_name: &str,
+    formatter: &Formatter,
+) -> Result<AdminClient, ExitCode> {
     let alias = get_admin_alias(alias_name, formatter)?;
 
     match AdminClient::new(&alias) {
@@ -285,7 +288,7 @@ pub fn get_admin_client(alias_name: &str, formatter: &Formatter) -> Result<Admin
 }
 
 /// Resolve an admin alias for commands that need both Admin and S3 adapters.
-pub fn get_admin_alias(alias_name: &str, formatter: &Formatter) -> Result<Alias, ExitCode> {
+pub(super) fn get_admin_alias(alias_name: &str, formatter: &Formatter) -> Result<Alias, ExitCode> {
     let alias_lookup_name = normalize_admin_alias(alias_name);
 
     let alias_manager = match AliasManager::new() {
@@ -298,8 +301,8 @@ pub fn get_admin_alias(alias_name: &str, formatter: &Formatter) -> Result<Alias,
 
     match alias_manager.get(alias_lookup_name) {
         Ok(a) => Ok(a),
-        Err(rc_core::Error::AliasNotFound(_)) => {
-            formatter.error(&format!("Alias '{}' not found", alias_name));
+        Err(Error::AliasNotFound(_)) => {
+            formatter.error(&format!("Alias '{alias_name}' not found"));
             Err(ExitCode::NotFound)
         }
         Err(e) => {

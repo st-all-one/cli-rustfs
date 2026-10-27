@@ -72,7 +72,7 @@ pub fn set_global_request_headers(headers: Vec<RequestHeader>) {
     let storage = GLOBAL_REQUEST_HEADERS.get_or_init(|| RwLock::new(Vec::new()));
     let mut guard = storage
         .write()
-        .expect("global request header lock should not be poisoned");
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     *guard = headers;
 }
 
@@ -84,7 +84,7 @@ pub fn global_request_headers() -> Vec<RequestHeader> {
 
     storage
         .read()
-        .expect("global request header lock should not be poisoned")
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .clone()
 }
 
@@ -404,7 +404,7 @@ fn decode_env_alias_credential(value: &str, var_name: &str, field: &str) -> Resu
     }
 
     urlencoding::decode(value)
-        .map(|decoded| decoded.into_owned())
+        .map(std::borrow::Cow::into_owned)
         .map_err(|e| {
             Error::Config(format!(
                 "{var_name} contains invalid percent-encoding in {field}: {e}"

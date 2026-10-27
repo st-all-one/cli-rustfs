@@ -1019,7 +1019,7 @@ fn runtime_identity_shortcut_requires_the_planned_destination_snapshot() {
     );
     let mut operation = MirrorCopyOperation {
         relative_path: "report.txt".to_string(),
-        source: source.clone(),
+        source,
         target: current.location.clone(),
         target_before: Some(current.clone()),
     };

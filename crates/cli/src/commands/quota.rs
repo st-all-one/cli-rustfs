@@ -13,7 +13,7 @@ use super::admin::get_admin_client;
 
 /// Manage bucket quota
 #[derive(Args, Debug)]
-pub struct QuotaArgs {
+pub(super) struct QuotaArgs {
     #[command(subcommand)]
     pub command: QuotaCommands,
 }
@@ -57,7 +57,7 @@ struct QuotaOutput {
 }
 
 /// Execute the quota command
-pub async fn execute(args: QuotaArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: QuotaArgs, output_config: OutputConfig) -> ExitCode {
     match args.command {
         QuotaCommands::Set(set_args) => execute_set(set_args, output_config).await,
         QuotaCommands::Info(bucket_arg) => execute_info(bucket_arg, output_config).await,

@@ -158,7 +158,7 @@ struct GroupOperationOutput {
 }
 
 /// Execute a group subcommand
-pub async fn execute(cmd: GroupCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(cmd: GroupCommands, formatter: &Formatter) -> ExitCode {
     match cmd {
         GroupCommands::List(args) => execute_list(args, formatter).await,
         GroupCommands::Add(args) => execute_add(args, formatter).await,

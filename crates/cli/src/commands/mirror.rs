@@ -747,7 +747,7 @@ where
 }
 
 /// Execute the mirror command.
-pub async fn execute(args: MirrorArgs, mut output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: MirrorArgs, mut output_config: OutputConfig) -> ExitCode {
     output_config.quiet |= args.quiet;
     let formatter = Formatter::new(output_config);
 
@@ -1131,8 +1131,8 @@ async fn enumerate_remote_manifest(
         {
             let raw_relative = object.key.strip_prefix(&prefix).ok_or_else(|| {
                 Error::InvalidPath(format!(
-                    "Remote key '{}' is outside mirror root '{}'",
-                    object.key, prefix
+                    "Remote key '{}' is outside mirror root '{prefix}'",
+                    object.key
                 ))
             })?;
             if raw_relative.is_empty() {
@@ -1168,8 +1168,7 @@ fn insert_manifest_entry(
     let relative_path = entry.relative_path.clone();
     if entries.insert(relative_path.clone(), entry).is_some() {
         return Err(Error::Conflict(format!(
-            "Multiple mirror entries normalize to '{}'",
-            relative_path
+            "Multiple mirror entries normalize to '{relative_path}'"
         )));
     }
     Ok(())
@@ -1438,12 +1437,11 @@ fn output_reports(formatter: &Formatter, args: &MirrorArgs, reports: &MirrorOper
 
 fn format_human_summary(output: &MirrorOutput, cancelled: usize, transferred_bytes: u64) -> String {
     format!(
-        "Summary: {} copied, {} removed, {} skipped, {} errors, {} cancelled, {} transferred",
+        "Summary: {} copied, {} removed, {} skipped, {} errors, {cancelled} cancelled, {} transferred",
         output.copied,
         output.removed,
         output.skipped,
         output.errors,
-        cancelled,
         humansize::format_size(transferred_bytes, humansize::BINARY)
     )
 }

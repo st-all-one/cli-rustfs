@@ -98,7 +98,7 @@ struct MetricSample {
     collected_at: String,
 }
 
-pub async fn execute(args: MetricsArgs, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(args: MetricsArgs, formatter: &Formatter) -> ExitCode {
     if args.samples == 0 || args.samples > MAX_METRICS_SAMPLES {
         return formatter.fail(
             ExitCode::UsageError,
@@ -265,7 +265,7 @@ fn collect_object(
                 });
             }
             Value::Object(child) => {
-                collect_object(child, &child_path, labels, timestamp, samples, latest)
+                collect_object(child, &child_path, labels, timestamp, samples, latest);
             }
             _ => {}
         }

@@ -151,7 +151,7 @@ impl BucketCreationStore for S3Client {
 }
 
 /// Execute the mb command
-pub async fn execute(args: MbArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: MbArgs, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
 
     let options = match CreateBucketOptions::for_cli(
@@ -224,7 +224,7 @@ pub async fn execute(args: MbArgs, output_config: OutputConfig) -> ExitCode {
     match run_bucket_creation(&client, &bucket, &options, args.ignore_existing).await {
         Ok(data) => {
             if formatter.is_json() {
-                formatter.json(&V3SuccessEnvelope::bucket_operations(data.clone()));
+                formatter.json(&V3SuccessEnvelope::bucket_operations(data));
             } else {
                 output_human_success(&formatter, &alias_name, &data);
             }
@@ -246,7 +246,10 @@ pub async fn execute(args: MbArgs, output_config: OutputConfig) -> ExitCode {
     }
 }
 
-#[allow(clippy::result_large_err)]
+#[allow(
+    clippy::result_large_err,
+    reason = "CLI error payload carries structured user-facing context"
+)]
 async fn run_bucket_creation<S: BucketCreationStore>(
     store: &S,
     bucket: &str,
@@ -265,15 +268,12 @@ async fn run_bucket_creation<S: BucketCreationStore>(
 
     let mut existing = false;
     if ignore_existing {
-        match store.bucket_exists(bucket).await {
-            Ok(true) => {
-                existing = true;
-                data.completed_stages.push("existing_bucket_detected");
-            }
-            Ok(false) | Err(_) => {
-                // Preserve the legacy `-p` behavior: creation remains authoritative when the
-                // preliminary HEAD request is unsupported or inconclusive.
-            }
+        if matches!(store.bucket_exists(bucket).await, Ok(true)) {
+            existing = true;
+            data.completed_stages.push("existing_bucket_detected");
+        } else {
+            // Preserve the legacy `-p` behavior: creation remains authoritative when the
+            // preliminary HEAD request is unsupported or inconclusive.
         }
     }
 
@@ -368,7 +368,10 @@ async fn run_bucket_creation<S: BucketCreationStore>(
     Ok(data)
 }
 
-#[allow(clippy::result_large_err)]
+#[allow(
+    clippy::result_large_err,
+    reason = "CLI error payload carries structured user-facing context"
+)]
 async fn verify_object_lock<S: BucketCreationStore>(
     store: &S,
     bucket: &str,
@@ -526,7 +529,7 @@ mod tests {
         exists: bool,
         deny_create: bool,
         versioning: Option<bool>,
-        lock: Option<rc_core::BucketObjectLockConfiguration>,
+        lock: Option<BucketObjectLockConfiguration>,
         location: Option<String>,
         calls: Mutex<Vec<&'static str>>,
     }
@@ -537,7 +540,7 @@ mod tests {
                 exists: false,
                 deny_create: false,
                 versioning: Some(true),
-                lock: Some(rc_core::BucketObjectLockConfiguration {
+                lock: Some(BucketObjectLockConfiguration {
                     enabled: true,
                     default_retention: None,
                 }),
@@ -564,7 +567,7 @@ mod tests {
         async fn create_bucket_with_options(
             &self,
             _bucket: &str,
-            _options: &rc_core::CreateBucketOptions,
+            _options: &CreateBucketOptions,
         ) -> rc_core::Result<()> {
             self.record("create_bucket");
             if self.deny_create {
@@ -591,7 +594,7 @@ mod tests {
         async fn get_bucket_object_lock_configuration(
             &self,
             _bucket: &str,
-        ) -> rc_core::Result<Option<rc_core::BucketObjectLockConfiguration>> {
+        ) -> rc_core::Result<Option<BucketObjectLockConfiguration>> {
             self.record("get_bucket_object_lock_configuration");
             Ok(self.lock.clone())
         }
@@ -600,8 +603,8 @@ mod tests {
     #[tokio::test]
     async fn versioning_is_enabled_and_verified_after_creation() {
         let store = FakeBucketStore::new();
-        let options = rc_core::CreateBucketOptions::for_cli(None, true, false)
-            .expect("valid versioning options");
+        let options =
+            CreateBucketOptions::for_cli(None, true, false).expect("valid versioning options");
 
         let result = run_bucket_creation(&store, "bucket", &options, false)
             .await
@@ -619,9 +622,8 @@ mod tests {
     async fn explicit_region_is_compared_with_the_service_reported_location() {
         let mut store = FakeBucketStore::new();
         store.location = Some("eu-west-1".to_string());
-        let options =
-            rc_core::CreateBucketOptions::for_cli(Some("eu-west-1".to_string()), false, false)
-                .expect("valid region options");
+        let options = CreateBucketOptions::for_cli(Some("eu-west-1".to_string()), false, false)
+            .expect("valid region options");
 
         let result = run_bucket_creation(&store, "bucket", &options, false)
             .await
@@ -634,9 +636,8 @@ mod tests {
     #[tokio::test]
     async fn region_mismatch_is_a_partial_conflict_after_bucket_creation() {
         let store = FakeBucketStore::new();
-        let options =
-            rc_core::CreateBucketOptions::for_cli(Some("eu-west-1".to_string()), false, false)
-                .expect("valid region options");
+        let options = CreateBucketOptions::for_cli(Some("eu-west-1".to_string()), false, false)
+            .expect("valid region options");
 
         let failure = run_bucket_creation(&store, "bucket", &options, false)
             .await
@@ -652,9 +653,8 @@ mod tests {
     async fn ignore_existing_rejects_a_service_reported_region_mismatch() {
         let mut store = FakeBucketStore::new();
         store.exists = true;
-        let options =
-            rc_core::CreateBucketOptions::for_cli(Some("eu-west-1".to_string()), false, false)
-                .expect("valid region options");
+        let options = CreateBucketOptions::for_cli(Some("eu-west-1".to_string()), false, false)
+            .expect("valid region options");
 
         let failure = run_bucket_creation(&store, "bucket", &options, true)
             .await
@@ -670,8 +670,8 @@ mod tests {
     async fn ignore_existing_may_enable_and_verify_versioning() {
         let mut store = FakeBucketStore::new();
         store.exists = true;
-        let options = rc_core::CreateBucketOptions::for_cli(None, true, false)
-            .expect("valid versioning options");
+        let options =
+            CreateBucketOptions::for_cli(None, true, false).expect("valid versioning options");
 
         let result = run_bucket_creation(&store, "bucket", &options, true)
             .await
@@ -688,8 +688,8 @@ mod tests {
     #[tokio::test]
     async fn object_lock_uses_creation_time_request_and_verifies_both_states() {
         let store = FakeBucketStore::new();
-        let options = rc_core::CreateBucketOptions::for_cli(None, false, true)
-            .expect("valid Object Lock options");
+        let options =
+            CreateBucketOptions::for_cli(None, false, true).expect("valid Object Lock options");
 
         let result = run_bucket_creation(&store, "bucket", &options, false)
             .await
@@ -711,8 +711,8 @@ mod tests {
         let mut store = FakeBucketStore::new();
         store.exists = true;
         store.lock = None;
-        let options = rc_core::CreateBucketOptions::for_cli(None, false, true)
-            .expect("valid Object Lock options");
+        let options =
+            CreateBucketOptions::for_cli(None, false, true).expect("valid Object Lock options");
 
         let failure = run_bucket_creation(&store, "bucket", &options, true)
             .await
@@ -730,8 +730,8 @@ mod tests {
     async fn versioning_verification_mismatch_reports_the_failed_partial_stage() {
         let mut store = FakeBucketStore::new();
         store.versioning = Some(false);
-        let options = rc_core::CreateBucketOptions::for_cli(None, true, false)
-            .expect("valid versioning options");
+        let options =
+            CreateBucketOptions::for_cli(None, true, false).expect("valid versioning options");
 
         let failure = run_bucket_creation(&store, "bucket", &options, false)
             .await
@@ -746,7 +746,7 @@ mod tests {
     #[tokio::test]
     async fn invalid_option_state_fails_before_any_store_request() {
         let store = FakeBucketStore::new();
-        let invalid = rc_core::CreateBucketOptions {
+        let invalid = CreateBucketOptions {
             region: None,
             versioning_enabled: false,
             object_lock_enabled: true,
@@ -766,14 +766,9 @@ mod tests {
         let mut store = FakeBucketStore::new();
         store.deny_create = true;
 
-        let failure = run_bucket_creation(
-            &store,
-            "bucket",
-            &rc_core::CreateBucketOptions::default(),
-            false,
-        )
-        .await
-        .expect_err("access denial must fail");
+        let failure = run_bucket_creation(&store, "bucket", &CreateBucketOptions::default(), false)
+            .await
+            .expect_err("access denial must fail");
 
         assert_eq!(failure.code, ExitCode::AuthError);
         assert_eq!(failure.data.outcome, "failed");

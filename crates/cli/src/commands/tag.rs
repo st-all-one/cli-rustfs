@@ -13,7 +13,7 @@ use crate::output::{Formatter, OutputConfig};
 
 /// Manage bucket and object tags
 #[derive(Args, Debug)]
-pub struct TagArgs {
+pub(super) struct TagArgs {
     #[command(subcommand)]
     pub command: TagCommands,
 }
@@ -90,7 +90,7 @@ impl TagTarget {
 }
 
 /// Execute the tag command
-pub async fn execute(args: TagArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: TagArgs, output_config: OutputConfig) -> ExitCode {
     match args.command {
         TagCommands::List(path_arg) => execute_list(path_arg, output_config).await,
         TagCommands::Set(set_args) => execute_set(set_args, output_config).await,
@@ -308,12 +308,11 @@ async fn setup_client(
         }
     };
 
-    let alias = match alias_manager.get(alias_name) {
-        Ok(alias) => alias,
-        Err(_) => {
-            formatter.error(&format!("Alias '{alias_name}' not found"));
-            return Err(ExitCode::NotFound);
-        }
+    let alias = if let Ok(alias) = alias_manager.get(alias_name) {
+        alias
+    } else {
+        formatter.error(&format!("Alias '{alias_name}' not found"));
+        return Err(ExitCode::NotFound);
     };
 
     let client = match S3Client::new(alias).await {

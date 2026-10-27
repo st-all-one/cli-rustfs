@@ -82,7 +82,7 @@ pub struct ClearRetentionArgs {
     pub default: bool,
 }
 
-pub async fn execute(args: RetentionArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: RetentionArgs, output_config: OutputConfig) -> ExitCode {
     match args.command {
         RetentionCommands::Info(args) => execute_info(args, output_config).await,
         RetentionCommands::Set(args) => execute_set(args, output_config).await,
@@ -380,8 +380,19 @@ async fn execute_clear(args: ClearRetentionArgs, output_config: OutputConfig) ->
 }
 
 fn current_timestamp() -> Result<Timestamp, String> {
+    if let Some(raw) = std::env::var_os("SOURCE_DATE_EPOCH") {
+        return timestamp_from_source_date_epoch(&raw.to_string_lossy());
+    }
     Timestamp::try_from(SystemTime::now())
         .map_err(|error| format!("System clock is outside the supported UTC range: {error}"))
+}
+
+fn timestamp_from_source_date_epoch(raw: &str) -> Result<Timestamp, String> {
+    let seconds = raw
+        .parse::<i64>()
+        .map_err(|error| format!("SOURCE_DATE_EPOCH must be Unix seconds: {error}"))?;
+    Timestamp::from_second(seconds)
+        .map_err(|error| format!("SOURCE_DATE_EPOCH is outside the supported UTC range: {error}"))
 }
 
 fn parse_object_validity(value: &str, now: Timestamp) -> Result<Timestamp, String> {
@@ -490,6 +501,17 @@ fn validate_retention_change(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn source_date_epoch_is_parsed_as_utc_seconds() {
+        let timestamp = timestamp_from_source_date_epoch("0").expect("epoch");
+        assert_eq!(timestamp.as_second(), 0);
+    }
+
+    #[test]
+    fn invalid_source_date_epoch_is_rejected() {
+        assert!(timestamp_from_source_date_epoch("not-a-number").is_err());
+    }
+
     use super::*;
 
     fn timestamp(value: &str) -> Timestamp {

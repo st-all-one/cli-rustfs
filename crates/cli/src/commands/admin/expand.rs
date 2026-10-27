@@ -31,7 +31,7 @@ pub enum ExpandCommands {
 }
 
 /// Execute an expansion workflow subcommand
-pub async fn execute(cmd: ExpandCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(cmd: ExpandCommands, formatter: &Formatter) -> ExitCode {
     match cmd {
         ExpandCommands::Start(args) => {
             rebalance::execute_start_with_messages(

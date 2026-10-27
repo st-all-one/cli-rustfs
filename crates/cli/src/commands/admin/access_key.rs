@@ -112,7 +112,7 @@ impl From<KeyTypeArg> for AccessKeyListType {
 }
 
 /// Execute an access key subcommand.
-pub async fn execute(cmd: AccessKeyCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(cmd: AccessKeyCommands, formatter: &Formatter) -> ExitCode {
     match cmd {
         AccessKeyCommands::Info(args) => execute_info(args, formatter).await,
         AccessKeyCommands::List(args) => execute_list(args, formatter).await,
@@ -596,7 +596,7 @@ async fn execute_info(args: InfoArgs, formatter: &Formatter) -> ExitCode {
             }
             ExitCode::Success
         }
-        Err(rc_core::Error::NotFound(_)) => {
+        Err(Error::NotFound(_)) => {
             formatter.error(&format!("Access key '{}' not found", args.access_key));
             ExitCode::NotFound
         }
@@ -611,7 +611,7 @@ async fn execute_info(args: InfoArgs, formatter: &Formatter) -> ExitCode {
     }
 }
 
-fn is_access_key_not_found_error(error: &rc_core::Error) -> bool {
+fn is_access_key_not_found_error(error: &Error) -> bool {
     error.to_string().contains("access key not exist")
 }
 
@@ -733,7 +733,7 @@ mod tests {
 
     #[test]
     fn test_access_key_not_exist_error_maps_to_not_found() {
-        let error = rc_core::Error::General("Bad request: access key not exist".to_string());
+        let error = Error::General("Bad request: access key not exist".to_string());
 
         assert!(is_access_key_not_found_error(&error));
     }

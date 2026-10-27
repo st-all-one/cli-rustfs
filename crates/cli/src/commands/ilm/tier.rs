@@ -12,6 +12,10 @@ use crate::output::{Formatter, OutputConfig};
 
 use super::super::admin::get_admin_client;
 
+#[allow(
+    clippy::large_enum_variant,
+    reason = "clap subcommand payloads are constructed once at parse time"
+)]
 #[derive(Subcommand, Debug)]
 pub enum TierCommands {
     /// Add a new remote storage tier
@@ -136,7 +140,7 @@ struct TierInfoOutput {
 }
 
 /// Execute a tier subcommand
-pub async fn execute(cmd: TierCommands, output_config: OutputConfig) -> ExitCode {
+pub(crate) async fn execute(cmd: TierCommands, output_config: OutputConfig) -> ExitCode {
     match cmd {
         TierCommands::Add(args) => execute_add(args, output_config).await,
         TierCommands::Edit(args) => execute_edit(args, output_config).await,
@@ -183,8 +187,8 @@ async fn execute_add(args: AddTierArgs, output_config: OutputConfig) -> ExitCode
                 });
             } else {
                 formatter.success(&format!(
-                    "Tier '{}' ({}) added successfully.",
-                    args.tier_name, tier_type
+                    "Tier '{}' ({tier_type}) added successfully.",
+                    args.tier_name
                 ));
             }
             ExitCode::Success

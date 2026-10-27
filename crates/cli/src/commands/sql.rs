@@ -205,7 +205,7 @@ impl From<QuoteFieldsArg> for SelectQuoteFields {
 }
 
 /// Execute the `sql` command.
-pub async fn execute(args: SqlArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: SqlArgs, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
 
     if args.query.trim().is_empty() {
@@ -235,12 +235,11 @@ pub async fn execute(args: SqlArgs, output_config: OutputConfig) -> ExitCode {
         }
     };
 
-    let alias = match alias_manager.get(&remote.alias) {
-        Ok(a) => a,
-        Err(_) => {
-            formatter.error(&format!("Alias '{}' not found", remote.alias));
-            return ExitCode::NotFound;
-        }
+    let alias = if let Ok(a) = alias_manager.get(&remote.alias) {
+        a
+    } else {
+        formatter.error(&format!("Alias '{}' not found", remote.alias));
+        return ExitCode::NotFound;
     };
 
     let client = match S3Client::new(alias).await {

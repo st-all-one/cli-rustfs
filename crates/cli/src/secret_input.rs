@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use zeroize::Zeroizing;
 
 #[derive(Clone, PartialEq, Eq)]
-pub(crate) enum SecretLocator {
+pub enum SecretLocator {
     File(PathBuf),
     Environment(String),
 }
@@ -20,7 +20,7 @@ impl fmt::Debug for SecretLocator {
     }
 }
 
-pub(crate) fn resolve_secret_locator(
+pub fn resolve_secret_locator(
     file: Option<PathBuf>,
     environment: Option<String>,
 ) -> Result<Option<SecretLocator>> {
@@ -351,7 +351,7 @@ mod tests {
 /// exist so automation never has to put a secret on the command line, where it
 /// would land in the shell history and in `ps` output.
 #[derive(Debug, Clone)]
-pub(crate) enum SecretSource {
+pub enum SecretSource {
     /// Read from a named environment variable.
     Environment(String),
     /// Read from the first line of a file.
@@ -458,7 +458,7 @@ impl SecretSource {
 
 /// Read a verification code, which is not secret enough to hide but is still
 /// kept out of the command line by default.
-pub(crate) fn read_code_interactive(prompt: &str) -> Result<Zeroizing<String>> {
+pub fn read_code_interactive(prompt: &str) -> Result<Zeroizing<String>> {
     let term = console::Term::stderr();
     term.write_str(prompt).map_err(Error::Io)?;
     // Echoed, unlike a password: a TOTP code is short-lived, and hiding it only
@@ -472,7 +472,7 @@ pub(crate) fn read_code_interactive(prompt: &str) -> Result<Zeroizing<String>> {
 }
 
 /// Whether prompting is possible and appropriate.
-pub(crate) fn can_prompt(is_json: bool) -> bool {
+pub fn can_prompt(is_json: bool) -> bool {
     use std::io::IsTerminal;
     !is_json && std::io::stdin().is_terminal()
 }

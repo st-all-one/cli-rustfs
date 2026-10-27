@@ -77,7 +77,7 @@ pub enum BucketCommands {
 }
 
 /// Execute the bucket command group
-pub async fn execute(args: BucketArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: BucketArgs, output_config: OutputConfig) -> ExitCode {
     // Boxing each branch keeps this dispatcher future below Windows' 1 MiB main-thread stack.
     match args.command {
         BucketCommands::List(args) => Box::pin(ls::execute(args, output_config)).await,

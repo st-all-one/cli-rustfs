@@ -252,7 +252,7 @@ impl BucketCleanupStore for S3Client {
 }
 
 /// Execute the rb command.
-pub async fn execute(args: RbArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: RbArgs, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
 
     // Clap enforces the same relationships for normal parsing. This validation remains at the
@@ -843,8 +843,8 @@ fn human_report_lines(report: &CleanupReport) -> Vec<String> {
             .map(|error| format!(": {}", error.message))
             .unwrap_or_default();
         lines.push(format!(
-            "{} {}{} [{}]{}",
-            result.state, result.target, identity, result.kind, detail
+            "{} {}{identity} [{}]{detail}",
+            result.state, result.target, result.kind
         ));
     }
     lines
@@ -903,18 +903,13 @@ fn exit_code_for_delete_failure(code: Option<&str>, message: Option<&str>) -> Ex
     .any(|needle| normalized.contains(needle))
     {
         ExitCode::Conflict
-    } else if matches!(
-        code,
-        Some("AccessDenied") | Some("Forbidden") | Some("Unauthorized")
-    ) || normalized.contains("access denied")
+    } else if matches!(code, Some("AccessDenied" | "Forbidden" | "Unauthorized"))
+        || normalized.contains("access denied")
         || normalized.contains("forbidden")
         || normalized.contains("unauthorized")
     {
         ExitCode::AuthError
-    } else if matches!(
-        code,
-        Some("NoSuchVersion") | Some("NoSuchKey") | Some("NotFound")
-    ) {
+    } else if matches!(code, Some("NoSuchVersion" | "NoSuchKey" | "NotFound")) {
         ExitCode::NotFound
     } else {
         ExitCode::GeneralError

@@ -29,7 +29,7 @@ pub async fn retry_with_backoff<T, F, Fut, R>(
 ) -> Result<T>
 where
     F: FnMut() -> Fut,
-    Fut: std::future::Future<Output = Result<T>>,
+    Fut: Future<Output = Result<T>>,
     R: Fn(&Error) -> bool,
 {
     let mut attempt = 0;
@@ -64,19 +64,24 @@ pub(crate) fn calculate_backoff(config: &RetryConfig, attempt: u32) -> Duration 
     let base_ms = config.initial_backoff_ms * (1u64 << (attempt - 1).min(10));
     let capped_ms = base_ms.min(config.max_backoff_ms);
 
-    // Add jitter: random value between 0 and backoff
-    let jitter_ms = rand_jitter(capped_ms);
+    // Add stable jitter: a deterministic value in `0..max`. This keeps retry
+    // timing reproducible for the same attempt and configuration. Callers that
+    // need per-request decorrelation should add an injected seed at the
+    // operation boundary rather than reading the wall clock here.
+    let jitter_ms = stable_jitter(capped_ms, attempt);
     Duration::from_millis(capped_ms + jitter_ms)
 }
 
-/// Generate pseudo-random jitter without external RNG dependency
-fn rand_jitter(max: u64) -> u64 {
-    use std::time::SystemTime;
-    let nanos = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_default()
-        .subsec_nanos() as u64;
-    nanos % max.max(1)
+/// Generate deterministic jitter with a splitmix64-style mixer.
+///
+/// The output depends only on `max` and `attempt`, so a fixed configuration
+/// always produces the same backoff sequence.
+fn stable_jitter(max: u64, attempt: u32) -> u64 {
+    let mut value = u64::from(attempt).wrapping_add(0x9e37_79b9_7f4a_7c15);
+    value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    value ^= value >> 31;
+    value % max.max(1)
 }
 
 /// Check if an error is retryable (transient)
@@ -192,6 +197,21 @@ mod tests {
         // Third attempt quadruples
         let b3 = calculate_backoff(&config, 3);
         assert!(b3.as_millis() >= 400 && b3.as_millis() < 800);
+    }
+
+    #[test]
+    fn test_backoff_jitter_is_deterministic() {
+        let config = RetryConfig {
+            max_attempts: 3,
+            initial_backoff_ms: 100,
+            max_backoff_ms: 10_000,
+        };
+
+        for attempt in 1..=10 {
+            let first = calculate_backoff(&config, attempt);
+            let second = calculate_backoff(&config, attempt);
+            assert_eq!(first, second, "attempt {attempt} must be reproducible");
+        }
     }
 
     #[test]

@@ -220,7 +220,7 @@ fn validate_lifecycle_root(body: &str) -> Result<()> {
 
     loop {
         match reader.read_event() {
-            Ok(Event::Start(element)) | Ok(Event::Empty(element)) => {
+            Ok(Event::Start(element) | Event::Empty(element)) => {
                 let root = element.local_name();
                 if root.as_ref() == b"LifecycleConfiguration" {
                     return Ok(());
@@ -545,9 +545,9 @@ mod tests {
 
     #[test]
     fn abort_only_rule_roundtrips_prefix_and_abort_action() {
-        let rules = vec![super::LifecycleRule {
+        let rules = vec![LifecycleRule {
             id: "abort-only".to_string(),
-            status: super::LifecycleRuleStatus::Enabled,
+            status: LifecycleRuleStatus::Enabled,
             prefix: Some("v1/".to_string()),
             tags: None,
             object_size_greater_than: None,
@@ -562,7 +562,7 @@ mod tests {
             abort_incomplete_multipart_upload_days: Some(1),
             expired_object_delete_marker: None,
         }];
-        let xml = super::build_lifecycle_configuration_xml(&rules);
+        let xml = build_lifecycle_configuration_xml(&rules);
         assert!(
             xml.contains("<AbortIncompleteMultipartUpload><DaysAfterInitiation>1</DaysAfterInitiation></AbortIncompleteMultipartUpload>"),
             "abort action missing from XML: {xml}"

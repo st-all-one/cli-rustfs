@@ -190,7 +190,7 @@ struct ServiceAccountOperationOutput {
 }
 
 /// Execute a service account subcommand
-pub async fn execute(cmd: ServiceAccountCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(cmd: ServiceAccountCommands, formatter: &Formatter) -> ExitCode {
     match cmd {
         ServiceAccountCommands::List(args) => execute_list(args, formatter).await,
         ServiceAccountCommands::Create(args) => execute_create(args, formatter).await,
@@ -220,11 +220,11 @@ async fn execute_list(args: ListArgs, formatter: &Formatter) -> ExitCode {
                     let styled_key = formatter.style_name(&sa.access_key);
                     let parent = sa
                         .parent_user
-                        .map(|p| format!(" (parent: {})", p))
+                        .map(|p| format!(" (parent: {p})"))
                         .unwrap_or_default();
                     let status = sa
                         .account_status
-                        .map(|s| format!(" [{}]", s))
+                        .map(|s| format!(" [{s}]"))
                         .unwrap_or_default();
                     formatter.println(&format!("  {styled_key}{parent}{status}"));
                 }
@@ -269,7 +269,7 @@ async fn execute_create(args: CreateArgs, formatter: &Formatter) -> ExitCode {
                 let output = ServiceAccountCreateOutput {
                     success: true,
                     access_key: sa.access_key.clone(),
-                    secret_key: sa.secret_key.clone(),
+                    secret_key: sa.secret_key,
                     message: "Service account created successfully".to_string(),
                 };
                 formatter.json(&output);

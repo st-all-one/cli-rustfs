@@ -34,7 +34,7 @@ pub struct CompletionsArgs {
 }
 
 /// Generate shell completions and either print or install them
-pub fn execute(args: CompletionsArgs) -> ExitCode {
+pub(super) fn execute(args: CompletionsArgs) -> ExitCode {
     let completion = generate_completions(args.shell);
     if !args.install {
         if let Err(error) = io::stdout().write_all(&completion) {

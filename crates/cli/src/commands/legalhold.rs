@@ -38,7 +38,7 @@ pub struct LegalHoldObjectArg {
     pub version_id: Option<String>,
 }
 
-pub async fn execute(args: LegalHoldArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: LegalHoldArgs, output_config: OutputConfig) -> ExitCode {
     match args.command {
         LegalHoldCommands::Info(args) => execute_info(args, output_config).await,
         LegalHoldCommands::Set(args) => {

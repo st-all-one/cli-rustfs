@@ -31,7 +31,7 @@ pub struct HeadArgs {
 }
 
 /// Execute the head command
-pub async fn execute(args: HeadArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: HeadArgs, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
 
     if let Err(error) = validate_version_selector(args.version_id.as_deref(), None) {
@@ -60,12 +60,11 @@ pub async fn execute(args: HeadArgs, output_config: OutputConfig) -> ExitCode {
         }
     };
 
-    let alias = match alias_manager.get(&alias_name) {
-        Ok(a) => a,
-        Err(_) => {
-            formatter.error(&format!("Alias '{alias_name}' not found"));
-            return ExitCode::NotFound;
-        }
+    let alias = if let Ok(a) = alias_manager.get(&alias_name) {
+        a
+    } else {
+        formatter.error(&format!("Alias '{alias_name}' not found"));
+        return ExitCode::NotFound;
     };
 
     // Create S3 client

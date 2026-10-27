@@ -349,7 +349,7 @@ impl ObjectWriteOptions {
         if self
             .retention
             .as_ref()
-            .is_some_and(|retention| retention.retain_until <= jiff::Timestamp::now())
+            .is_some_and(|retention| retention.retain_until <= Timestamp::now())
         {
             return Err(Error::InvalidPath(
                 "Object retention date must be in the future".to_string(),

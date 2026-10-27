@@ -26,7 +26,7 @@ const VALID_CORS_METHODS: [&str; 5] = ["GET", "PUT", "HEAD", "POST", "DELETE"];
 /// Manage bucket CORS configuration
 #[derive(Args, Debug)]
 #[command(after_help = CORS_AFTER_HELP)]
-pub struct CorsArgs {
+pub(super) struct CorsArgs {
     #[command(subcommand)]
     pub command: CorsCommands,
 }
@@ -108,7 +108,7 @@ struct CorsRuleXml {
 }
 
 /// Execute the cors command
-pub async fn execute(args: CorsArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: CorsArgs, output_config: OutputConfig) -> ExitCode {
     match args.command {
         CorsCommands::List(args) => execute_list(args, output_config).await,
         CorsCommands::Set(args) => execute_set(args, output_config).await,
@@ -206,7 +206,7 @@ async fn execute_set(args: SetCorsArgs, output_config: OutputConfig) -> ExitCode
         Err(error) => {
             return formatter.fail(
                 ExitCode::GeneralError,
-                &format!("Failed to read CORS source '{}': {error}", source),
+                &format!("Failed to read CORS source '{source}': {error}"),
             );
         }
     };
@@ -425,9 +425,8 @@ fn parse_cors_configuration(contents: &str) -> Result<CorsConfiguration, String>
             .find(|method| !VALID_CORS_METHODS.contains(&method.as_str()))
         {
             return Err(format!(
-                "rule {} contains unsupported method '{}'",
-                index + 1,
-                invalid_method
+                "rule {} contains unsupported method '{invalid_method}'",
+                index + 1
             ));
         }
 
@@ -633,13 +632,13 @@ mod tests {
     #[test]
     fn test_parse_cors_configuration_xml_rejects_missing_allowed_origin() {
         let error = parse_cors_configuration(
-            r#"
+            r"
 <CORSConfiguration>
   <CORSRule>
     <AllowedMethod>GET</AllowedMethod>
   </CORSRule>
 </CORSConfiguration>
-"#,
+",
         )
         .expect_err("missing xml allowed origin");
 
@@ -649,13 +648,13 @@ mod tests {
     #[test]
     fn test_parse_cors_configuration_xml_rejects_missing_allowed_method() {
         let error = parse_cors_configuration(
-            r#"
+            r"
 <CORSConfiguration>
   <CORSRule>
     <AllowedOrigin>https://console.example.com</AllowedOrigin>
   </CORSRule>
 </CORSConfiguration>
-"#,
+",
         )
         .expect_err("missing xml allowed method");
 
@@ -699,7 +698,7 @@ mod tests {
     #[test]
     fn test_parse_cors_configuration_accepts_xml() {
         let config = parse_cors_configuration(
-            r#"
+            r"
 <CORSConfiguration>
   <CORSRule>
     <ID>mc-rule</ID>
@@ -711,7 +710,7 @@ mod tests {
     <MaxAgeSeconds>1200</MaxAgeSeconds>
   </CORSRule>
 </CORSConfiguration>
-"#,
+",
         )
         .expect("parse xml config");
 
@@ -753,7 +752,7 @@ mod tests {
     #[test]
     fn test_parse_cors_configuration_xml_drops_blank_optional_headers() {
         let config = parse_cors_configuration(
-            r#"
+            r"
 <CORSConfiguration>
   <CORSRule>
     <AllowedOrigin>https://console.example.com</AllowedOrigin>
@@ -762,7 +761,7 @@ mod tests {
     <ExposeHeader></ExposeHeader>
   </CORSRule>
 </CORSConfiguration>
-"#,
+",
         )
         .expect("parse xml config with blank optional headers");
 

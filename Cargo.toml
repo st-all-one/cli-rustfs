@@ -5,7 +5,7 @@ members = ["crates/cli", "crates/core", "crates/s3"]
 [workspace.package]
 version = "0.1.24"
 edition = "2024"
-rust-version = "1.92"
+rust-version = "1.99"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/rustfs/cli"
 homepage = "https://github.com/rustfs/cli"
@@ -41,7 +41,6 @@ quick-xml = { version = "0.41", features = ["serialize"] }
 
 # Error handling
 thiserror = "2.0"
-anyhow = "1.0"
 
 # Logging
 tracing = "0.1"
@@ -72,7 +71,7 @@ aes-gcm = "0.10"
 rsa = { version = "0.9", features = ["sha2", "pem"] }
 rand = "0.8"
 tar = "0.4"
-zip = { version = "8.6", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 
 # HTTP client for Admin API
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "rustls-tls-webpki-roots", "json", "stream"] }
@@ -92,7 +91,125 @@ mockall = "0.14"
 insta = { version = "1.46", features = ["json"] }
 jsonschema = { version = "0.48", default-features = false }
 
+# Strict lint policy (adapted from knudge). Levels live here; values and
+# project-specific exceptions live in clippy.toml.
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+unused_qualifications = "warn"
+unused_lifetimes = "deny"
+elided_lifetimes_in_paths = "deny"
+single_use_lifetimes = "deny"
+trivial_casts = "deny"
+trivial_numeric_casts = "deny"
+unreachable_pub = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+let_underscore_drop = "deny"
+macro_use_extern_crate = "deny"
+meta_variable_misuse = "deny"
+non_ascii_idents = "deny"
+noop_method_call = "deny"
+unused_import_braces = "deny"
+variant_size_differences = "warn"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "deny"
+unused_footnote_definition = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+style = { level = "deny", priority = -1 }
+complexity = { level = "deny", priority = -1 }
+perf = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "warn"
+dbg_macro = "deny"
+mem_forget = "deny"
+# Visible during the ratchet, but not a hard gate yet: the S3 parsers rely on
+# length/index checks that are locally obvious and covered by tests.
+indexing_slicing = "warn"
+arithmetic_side_effects = "warn"
+as_conversions = "warn"
+cast_possible_truncation = "warn"
+cast_sign_loss = "warn"
+cast_possible_wrap = "warn"
+cast_precision_loss = "warn"
+undocumented_unsafe_blocks = "deny"
+multiple_unsafe_ops_per_block = "deny"
+let_underscore_must_use = "warn"
+let_underscore_untyped = "warn"
+absolute_paths = "warn"
+wildcard_imports = "deny"
+# API-shape lints: these often mirror external S3/Admin wire contracts, so a
+# bool-to-enum refactor would obscure the protocol. They stay visible as warnings.
+fn_params_excessive_bools = "warn"
+struct_excessive_bools = "warn"
+# async_trait expands `#[must_use]` onto boxed futures that already carry it.
+double_must_use = "allow"
+disallowed_fields = "deny"
+disallowed_macros = "deny"
+disallowed_methods = "deny"
+disallowed_names = "deny"
+disallowed_types = "deny"
+await_holding_lock = "deny"
+await_holding_refcell_ref = "deny"
+allow_attributes_without_reason = "deny"
+
+large_enum_variant = "deny"
+result_large_err = "warn"
+large_types_passed_by_value = "warn"
+large_stack_arrays = "deny"
+large_stack_frames = "warn"
+large_futures = "warn"
+
+# Deliberate project exceptions (kept visible instead of hidden globally).
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+implicit_hasher = "allow"
+multiple_crate_versions = "allow"
+min_ident_chars = "allow"
+many_single_char_names = "allow"
+missing_docs_in_private_items = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+allow_attributes = "allow"
+option_if_let_else = "allow"
+significant_drop_tightening = "allow"
+missing_const_for_fn = "allow"
+excessive_nesting = "allow"
+assert_is_empty = "allow"
+# Domain vocabulary and public API names are kept stable for compatibility.
+upper_case_acronyms = "allow"
+too_many_arguments = "allow"
+type_complexity = "allow"
+doc_markdown = "allow"
+use_self = "allow"
+map_unwrap_or = "allow"
+derive_partial_eq_without_eq = "allow"
+too_many_lines = "allow"
+ignored_unit_patterns = "allow"
+struct_field_names = "allow"
+return_self_not_must_use = "allow"
+match_same_arms = "allow"
+
+
 [profile.release]
-lto = true
+lto = "fat"
 codegen-units = 1
-strip = true
+strip = "symbols"
+overflow-checks = true
+panic = "abort"
+
+[profile.dev]
+debug-assertions = true
+overflow-checks = true

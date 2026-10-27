@@ -12,7 +12,7 @@ use crate::output::{Formatter, OutputConfig};
 
 /// Manage bucket versioning
 #[derive(Args, Debug)]
-pub struct VersionArgs {
+pub(super) struct VersionArgs {
     #[command(subcommand)]
     pub command: VersionCommands,
 }
@@ -78,7 +78,7 @@ struct VersionInfo {
 }
 
 /// Execute the version command
-pub async fn execute(args: VersionArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: VersionArgs, output_config: OutputConfig) -> ExitCode {
     match args.command {
         VersionCommands::Enable(bucket_arg) => execute_enable(bucket_arg, output_config).await,
         VersionCommands::Suspend(bucket_arg) => execute_suspend(bucket_arg, output_config).await,
@@ -253,10 +253,9 @@ async fn execute_list(args: ListVersionsArgs, output_config: OutputConfig) -> Ex
                         .unwrap_or_default();
 
                     formatter.println(&format!(
-                        "{latest} {:<40} {:>10} {:>12} {marker}",
+                        "{latest} {:<40} {:>10} {size:>12} {marker}",
                         v.key,
-                        v.version_id.chars().take(10).collect::<String>(),
-                        size
+                        v.version_id.chars().take(10).collect::<String>()
                     ));
                 }
                 formatter.println(&format!("\nTotal: {} version(s)", versions.len()));
@@ -284,12 +283,11 @@ async fn setup_client(
         }
     };
 
-    let alias = match alias_manager.get(alias_name) {
-        Ok(a) => a,
-        Err(_) => {
-            formatter.error(&format!("Alias '{alias_name}' not found"));
-            return Err(ExitCode::NotFound);
-        }
+    let alias = if let Ok(a) = alias_manager.get(alias_name) {
+        a
+    } else {
+        formatter.error(&format!("Alias '{alias_name}' not found"));
+        return Err(ExitCode::NotFound);
     };
 
     let client = match S3Client::new(alias).await {

@@ -279,7 +279,7 @@ struct KmsRoundTripData<'a> {
 
 const MAX_KMS_CONFIG_BYTES: u64 = 1024 * 1024;
 
-pub async fn execute(command: KmsCommands, formatter: &Formatter) -> ExitCode {
+pub(super) async fn execute(command: KmsCommands, formatter: &Formatter) -> ExitCode {
     match command {
         KmsCommands::Status(args) => execute_status(args, formatter).await,
         KmsCommands::Configure(args) => execute_configure(args, false, formatter).await,
@@ -316,41 +316,40 @@ async fn execute_roundtrip(args: KmsRoundtripArgs, formatter: &Formatter) -> Exi
         Ok(alias) => alias,
         Err(code) => return code,
     };
-    let key_id = match explicit_key_id {
-        Some(key_id) => key_id,
-        None => {
-            let admin = match AdminClient::new(&alias) {
-                Ok(client) => client,
-                Err(_) => {
-                    return emit_kms_error(
-                        "Failed to resolve the default KMS key",
-                        &Error::General("Failed to create KMS administration client".to_string()),
-                        false,
-                        formatter,
-                    );
-                }
-            };
-            let status = match admin.kms_status().await {
-                Ok(status) => status,
-                Err(error) => {
-                    return emit_kms_error(
-                        "Failed to resolve the default KMS key",
-                        &error,
-                        false,
-                        formatter,
-                    );
-                }
-            };
-            match resolve_roundtrip_key_id(None, &status) {
-                Ok(key_id) => key_id,
-                Err(error) => {
-                    return emit_kms_error(
-                        "Failed to resolve the default KMS key",
-                        &error,
-                        false,
-                        formatter,
-                    );
-                }
+    let key_id = if let Some(key_id) = explicit_key_id {
+        key_id
+    } else {
+        let admin = match AdminClient::new(&alias) {
+            Ok(client) => client,
+            Err(_) => {
+                return emit_kms_error(
+                    "Failed to resolve the default KMS key",
+                    &Error::General("Failed to create KMS administration client".to_string()),
+                    false,
+                    formatter,
+                );
+            }
+        };
+        let status = match admin.kms_status().await {
+            Ok(status) => status,
+            Err(error) => {
+                return emit_kms_error(
+                    "Failed to resolve the default KMS key",
+                    &error,
+                    false,
+                    formatter,
+                );
+            }
+        };
+        match resolve_roundtrip_key_id(None, &status) {
+            Ok(key_id) => key_id,
+            Err(error) => {
+                return emit_kms_error(
+                    "Failed to resolve the default KMS key",
+                    &error,
+                    false,
+                    formatter,
+                );
             }
         }
     };
@@ -648,8 +647,7 @@ fn read_bounded_configuration(reader: impl Read) -> Result<Zeroizing<Vec<u8>>> {
         .map_err(|_| Error::InvalidPath("Failed to read KMS configuration input".to_string()))?;
     if bytes.len() as u64 > MAX_KMS_CONFIG_BYTES {
         return Err(Error::InvalidPath(format!(
-            "KMS configuration input exceeds the {} byte limit",
-            MAX_KMS_CONFIG_BYTES
+            "KMS configuration input exceeds the {MAX_KMS_CONFIG_BYTES} byte limit"
         )));
     }
     Ok(bytes)
@@ -1283,7 +1281,7 @@ mod tests {
         };
         let value = serde_json::to_value(output).expect("roundtrip output should serialize");
         let schema_path =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schemas/output_v3.json");
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../schemas/output_v3.json");
         let schema: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(&schema_path).unwrap_or_else(|error| {
                 panic!("failed to read {}: {error}", schema_path.display())

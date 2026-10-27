@@ -361,11 +361,11 @@ impl AdminClient {
 
     /// Build the base URL for admin API
     fn admin_url(&self, path: &str) -> String {
-        format!("{}/rustfs/admin/v3{}", self.endpoint, path)
+        format!("{}/rustfs/admin/v3{path}", self.endpoint)
     }
 
     fn admin_v4_url(&self, path: &str) -> String {
-        format!("{}/rustfs/admin/v4{}", self.endpoint, path)
+        format!("{}/rustfs/admin/v4{path}", self.endpoint)
     }
 
     pub(crate) const fn http_client(&self) -> &Client {
@@ -508,7 +508,7 @@ impl AdminClient {
         let headers = self.request_headers(&[])?;
         let signed_headers = self.sign_request(&method, &url, &headers, &[]).await?;
         let mut request_builder = self.http_client.request(method, &url);
-        for (name, value) in signed_headers.iter() {
+        for (name, value) in &signed_headers {
             request_builder = request_builder.header(name, value);
         }
 
@@ -552,7 +552,7 @@ impl AdminClient {
 
         let mut request_builder = self.http_client.request(method.clone(), &url);
 
-        for (name, value) in signed_headers.iter() {
+        for (name, value) in &signed_headers {
             request_builder = request_builder.header(name, value);
         }
 
@@ -600,9 +600,8 @@ impl AdminClient {
         let body_bytes = body.unwrap_or(&[]);
         if body_bytes.len() > MAX_SITE_REPLICATION_REQUEST_BYTES {
             return Err(Error::RequestRejected(format!(
-                "Site replication request size {} exceeds the {} byte limit",
-                body_bytes.len(),
-                MAX_SITE_REPLICATION_REQUEST_BYTES
+                "Site replication request size {} exceeds the {MAX_SITE_REPLICATION_REQUEST_BYTES} byte limit",
+                body_bytes.len()
             )));
         }
 
@@ -748,7 +747,7 @@ impl AdminClient {
             .sign_request(&method, &url, &headers, body_bytes)
             .await?;
         let mut request_builder = self.http_client.request(method, &url);
-        for (name, value) in signed_headers.iter() {
+        for (name, value) in &signed_headers {
             request_builder = request_builder.header(name, value);
         }
         if !body_bytes.is_empty() {
@@ -989,7 +988,7 @@ impl AdminClient {
             .sign_request(&method, &url, &headers, body_bytes)
             .await?;
         let mut request_builder = self.http_client.request(method, &url);
-        for (name, value) in signed_headers.iter() {
+        for (name, value) in &signed_headers {
             request_builder = request_builder.header(name, value);
         }
         if let Some(body) = body {
@@ -1047,7 +1046,7 @@ impl AdminClient {
 
         let mut request_builder = self.http_client.request(method.clone(), &url);
 
-        for (name, value) in signed_headers.iter() {
+        for (name, value) in &signed_headers {
             request_builder = request_builder.header(name, value);
         }
 
@@ -1179,7 +1178,7 @@ impl AdminClient {
         match status {
             StatusCode::CONFLICT => Error::Conflict(body.to_string()),
             StatusCode::BAD_REQUEST => Error::General(format!("Bad request: {body}")),
-            _ => Error::Network(format!("HTTP {}: {}", status.as_u16(), body)),
+            _ => Error::Network(format!("HTTP {}: {body}", status.as_u16())),
         }
     }
 
@@ -2173,14 +2172,8 @@ fn rustfs_heal_body(request: &HealStartRequest) -> Result<Vec<u8>> {
 }
 
 fn rustfs_heal_start_body(request: &HealStartRequest) -> Result<Vec<u8>> {
-    let recursive = request
-        .bucket
-        .as_deref()
-        .is_none_or(|bucket| bucket.is_empty())
-        && request
-            .prefix
-            .as_deref()
-            .is_none_or(|prefix| prefix.is_empty());
+    let recursive = request.bucket.as_deref().is_none_or(str::is_empty)
+        && request.prefix.as_deref().is_none_or(str::is_empty);
     serde_json::to_vec(&RustfsHealOptions::from_request(request, recursive)).map_err(Error::Json)
 }
 
@@ -5134,7 +5127,7 @@ impl AdminApi for AdminClient {
     async fn create_group(&self, name: &str, members: Option<&[String]>) -> Result<Group> {
         let body = serde_json::to_vec(&CreateGroupRequest {
             group: name.to_string(),
-            members: members.map(|m| m.to_vec()),
+            members: members.map(<[String]>::to_vec),
         })
         .map_err(Error::Json)?;
 
@@ -5144,7 +5137,7 @@ impl AdminApi for AdminClient {
         Ok(Group {
             name: name.to_string(),
             policy: None,
-            members: members.map(|m| m.to_vec()).unwrap_or_default(),
+            members: members.map(<[String]>::to_vec).unwrap_or_default(),
             status: GroupStatus::Enabled,
         })
     }
@@ -6927,7 +6920,7 @@ mod tests {
         tokio::task::spawn_blocking(move || {
             accepted_receiver
                 .recv_timeout(Duration::from_secs(15))
-                .expect("active request accepted")
+                .expect("active request accepted");
         })
         .await
         .expect("accept wait task");
@@ -7105,9 +7098,8 @@ mod tests {
             let (mut stream, _) = listener.accept().expect("accept info request");
             let _request = read_admin_request(&mut stream);
             let response = format!(
-                "HTTP/1.1 200 OK\r\ncontent-length: {}\r\ncontent-type: application/json\r\nconnection: close\r\n\r\n{}",
-                CAPABILITY_INFO_RESPONSE.len(),
-                CAPABILITY_INFO_RESPONSE
+                "HTTP/1.1 200 OK\r\ncontent-length: {}\r\ncontent-type: application/json\r\nconnection: close\r\n\r\n{CAPABILITY_INFO_RESPONSE}",
+                CAPABILITY_INFO_RESPONSE.len()
             );
             stream
                 .write_all(response.as_bytes())
@@ -7117,7 +7109,7 @@ mod tests {
             let _request = read_admin_request(&mut stream);
             let response = format!(
                 "HTTP/1.1 200 OK\r\ncontent-length: {}\r\ncontent-type: application/json\r\nconnection: close\r\n\r\n",
-                rc_core::admin::MAX_DIAGNOSTIC_RESPONSE_BYTES + 1
+                MAX_DIAGNOSTIC_RESPONSE_BYTES + 1
             );
             stream
                 .write_all(response.as_bytes())
@@ -8831,7 +8823,7 @@ mod tests {
             r#"{"success":true,"status":"updated","errorDetail":"","apiVersion":"v1"}"#,
         );
         let client = admin_client_for_endpoint(&endpoint);
-        let info: rc_core::admin::SiteReplicationInfo =
+        let info: SiteReplicationInfo =
             serde_json::from_str(SITE_REPLICATION_INFO_RESPONSE).expect("valid info fixture");
 
         let status = client
@@ -8858,7 +8850,7 @@ mod tests {
     async fn site_replication_info_rejects_declared_success_overflow() {
         let response = format!(
             "HTTP/1.1 200 OK\r\ncontent-length: {}\r\ncontent-type: application/json\r\nconnection: close\r\n\r\n",
-            rc_core::admin::MAX_SITE_REPLICATION_SUCCESS_RESPONSE_BYTES + 1
+            MAX_SITE_REPLICATION_SUCCESS_RESPONSE_BYTES + 1
         )
         .into_bytes();
         let (endpoint, handle) = start_admin_raw_response_server(response);
@@ -8878,7 +8870,7 @@ mod tests {
     async fn site_replication_info_rejects_chunked_success_overflow() {
         let mut response = b"HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\ncontent-type: application/json\r\nconnection: close\r\n\r\n".to_vec();
         let chunk = vec![b'x'; 64 * 1024];
-        for _ in 0..=rc_core::admin::MAX_SITE_REPLICATION_SUCCESS_RESPONSE_BYTES / chunk.len() {
+        for _ in 0..=MAX_SITE_REPLICATION_SUCCESS_RESPONSE_BYTES / chunk.len() {
             response.extend_from_slice(format!("{:x}\r\n", chunk.len()).as_bytes());
             response.extend_from_slice(&chunk);
             response.extend_from_slice(b"\r\n");
@@ -8900,13 +8892,13 @@ mod tests {
     #[tokio::test]
     async fn site_replication_edit_rejects_chunked_error_overflow() {
         let mut response = b"HTTP/1.1 500 Internal Server Error\r\ntransfer-encoding: chunked\r\ncontent-type: application/json\r\nconnection: close\r\n\r\n".to_vec();
-        let body = vec![b'x'; rc_core::admin::MAX_SITE_REPLICATION_ERROR_RESPONSE_BYTES + 1];
+        let body = vec![b'x'; MAX_SITE_REPLICATION_ERROR_RESPONSE_BYTES + 1];
         response.extend_from_slice(format!("{:x}\r\n", body.len()).as_bytes());
         response.extend_from_slice(&body);
         response.extend_from_slice(b"\r\n0\r\n\r\n");
         let (endpoint, handle) = start_admin_raw_response_server(response);
         let client = admin_client_for_endpoint(&endpoint);
-        let peer = rc_core::admin::SiteReplicationPeer::default();
+        let peer = SiteReplicationPeer::default();
 
         let error = client
             .site_replication_edit(&peer)
@@ -8935,8 +8927,8 @@ mod tests {
     #[tokio::test]
     async fn site_replication_edit_rejects_oversized_request_before_network() {
         let client = admin_client_for_endpoint("http://127.0.0.1:1");
-        let mut peer = rc_core::admin::SiteReplicationPeer::default();
-        peer.set_ca_cert_pem("x".repeat(rc_core::admin::MAX_SITE_REPLICATION_REQUEST_BYTES + 1));
+        let mut peer = SiteReplicationPeer::default();
+        peer.set_ca_cert_pem("x".repeat(MAX_SITE_REPLICATION_REQUEST_BYTES + 1));
 
         let error = client
             .site_replication_edit(&peer)
@@ -8954,7 +8946,7 @@ mod tests {
             r#"{"success":false,"status":"rejected","errorDetail":"peer is invalid","apiVersion":"v1"}"#,
         );
         let client = admin_client_for_endpoint(&endpoint);
-        let peer = rc_core::admin::SiteReplicationPeer::default();
+        let peer = SiteReplicationPeer::default();
 
         let error = client
             .site_replication_edit(&peer)
@@ -9244,7 +9236,7 @@ mod tests {
             let leaked: &'static str = Box::leak(body.into_boxed_str());
             let (endpoint, _receiver, handle) = start_admin_test_server("200 OK", leaked);
             let client = admin_client_for_endpoint(&endpoint);
-            let peer = rc_core::admin::SiteReplicationPeer::default();
+            let peer = SiteReplicationPeer::default();
 
             let error = client
                 .site_replication_edit(&peer)
@@ -9270,7 +9262,7 @@ mod tests {
             let leaked: &'static str = Box::leak(body.into_boxed_str());
             let (endpoint, _receiver, handle) = start_admin_test_server("200 OK", leaked);
             let client = admin_client_for_endpoint(&endpoint);
-            let peer = rc_core::admin::SiteReplicationPeer::default();
+            let peer = SiteReplicationPeer::default();
 
             let error = client
                 .site_replication_edit(&peer)
@@ -9288,7 +9280,7 @@ mod tests {
         let typed_body = r#"{"success":false,"status":"pending value is malformed","errorDetail":"","apiVersion":"v1"}"#;
         let (endpoint, _receiver, handle) = start_admin_test_server("200 OK", typed_body);
         let client = admin_client_for_endpoint(&endpoint);
-        let peer = rc_core::admin::SiteReplicationPeer::default();
+        let peer = SiteReplicationPeer::default();
 
         let typed_error = client
             .site_replication_edit(&peer)
@@ -9320,7 +9312,7 @@ mod tests {
             r#"{"message":"do not redirect mutations"}"#,
         );
         let client = admin_client_for_endpoint(&endpoint);
-        let peer = rc_core::admin::SiteReplicationPeer::default();
+        let peer = SiteReplicationPeer::default();
 
         let error = client
             .site_replication_edit(&peer)
@@ -9346,7 +9338,7 @@ mod tests {
                 .expect("send captured request");
         });
         let client = admin_client_for_endpoint(&endpoint);
-        let peer = rc_core::admin::SiteReplicationPeer::default();
+        let peer = SiteReplicationPeer::default();
 
         let error = client
             .site_replication_edit(&peer)
@@ -9369,7 +9361,7 @@ mod tests {
             r#"{"code":"SiteReplicationOperationPending","message":"another site replication operation is pending"}"#,
         );
         let client = admin_client_for_endpoint(&endpoint);
-        let peer = rc_core::admin::SiteReplicationPeer::default();
+        let peer = SiteReplicationPeer::default();
 
         let error = client
             .site_replication_edit(&peer)
@@ -9390,7 +9382,7 @@ mod tests {
             let leaked: &'static str = Box::leak(body.into_boxed_str());
             let (endpoint, _receiver, handle) = start_admin_test_server("400 Bad Request", leaked);
             let client = admin_client_for_endpoint(&endpoint);
-            let peer = rc_core::admin::SiteReplicationPeer::default();
+            let peer = SiteReplicationPeer::default();
 
             let error = client
                 .site_replication_edit(&peer)
@@ -9424,7 +9416,7 @@ mod tests {
     async fn site_replication_edit_rejects_malformed_success_json() {
         let (endpoint, _receiver, handle) = start_admin_test_server("200 OK", "{");
         let client = admin_client_for_endpoint(&endpoint);
-        let peer = rc_core::admin::SiteReplicationPeer::default();
+        let peer = SiteReplicationPeer::default();
 
         let error = client
             .site_replication_edit(&peer)
@@ -9439,7 +9431,7 @@ mod tests {
     async fn site_replication_edit_maps_method_not_allowed_to_unsupported() {
         let (endpoint, _receiver, handle) = start_admin_test_server("405 Method Not Allowed", "");
         let client = admin_client_for_endpoint(&endpoint);
-        let peer = rc_core::admin::SiteReplicationPeer::default();
+        let peer = SiteReplicationPeer::default();
 
         let error = client
             .site_replication_edit(&peer)
@@ -9483,7 +9475,7 @@ mod tests {
             r#"{"code":"Conflict","message":"accessKey=DO-NOT-ECHO secret=DO-NOT-ECHO"}"#,
         );
         let client = admin_client_for_endpoint(&endpoint);
-        let peer = rc_core::admin::SiteReplicationPeer::default();
+        let peer = SiteReplicationPeer::default();
 
         let error = client
             .site_replication_edit(&peer)
@@ -9528,7 +9520,7 @@ mod tests {
             r#"{"success":true,"status":"updated by access using secret","errorDetail":"access secret","apiVersion":"v1"}"#,
         );
         let client = admin_client_for_endpoint(&endpoint);
-        let peer = rc_core::admin::SiteReplicationPeer::default();
+        let peer = SiteReplicationPeer::default();
 
         let status = client
             .site_replication_edit(&peer)
@@ -9866,7 +9858,7 @@ mod tests {
         let (endpoint, receiver, handle) =
             start_admin_owned_test_server("200 OK", "application/x-ndjson", body.to_string());
         let client = admin_client_for_endpoint(&endpoint);
-        let query = rc_core::admin::MetricsQuery {
+        let query = MetricsQuery {
             scopes: vec![
                 rc_core::admin::MetricsScope::Scanner,
                 rc_core::admin::MetricsScope::Disk,
@@ -10120,7 +10112,7 @@ mod tests {
         );
         let client = admin_client_for_endpoint(&endpoint);
         let error = client
-            .realtime_metrics(&rc_core::admin::MetricsQuery::default())
+            .realtime_metrics(&MetricsQuery::default())
             .await
             .expect_err("malformed metrics should fail");
         assert!(matches!(error, Error::Json(_)));
@@ -10128,13 +10120,13 @@ mod tests {
 
         let oversized = format!(
             "{{\"padding\":\"{}\"}}\n",
-            "x".repeat(rc_core::admin::MAX_METRICS_LINE_BYTES)
+            "x".repeat(MAX_METRICS_LINE_BYTES)
         );
         let (endpoint, _receiver, handle) =
             start_admin_owned_test_server("200 OK", "application/x-ndjson", oversized);
         let client = admin_client_for_endpoint(&endpoint);
         let error = client
-            .realtime_metrics(&rc_core::admin::MetricsQuery::default())
+            .realtime_metrics(&MetricsQuery::default())
             .await
             .expect_err("oversized metrics should fail");
         assert!(matches!(error, Error::General(message) if message.contains("record limit")));
@@ -10362,7 +10354,7 @@ mod tests {
         client
             .update_service_account(
                 "service key/one",
-                rc_core::admin::UpdateServiceAccountRequest {
+                UpdateServiceAccountRequest {
                     new_policy: Some(r#"{"Version":"2012-10-17"}"#.to_string()),
                     new_description: Some("Updated description".to_string()),
                     ..Default::default()
@@ -10440,10 +10432,8 @@ mod tests {
         assert!(matches!(error, Error::Json(_)));
         handle.join().expect("malformed server should finish");
 
-        let (endpoint, _receiver, handle) = start_admin_content_length_test_server(
-            "200 OK",
-            rc_core::admin::MAX_DIAGNOSTIC_RESPONSE_BYTES + 1,
-        );
+        let (endpoint, _receiver, handle) =
+            start_admin_content_length_test_server("200 OK", MAX_DIAGNOSTIC_RESPONSE_BYTES + 1);
         let error = admin_client_for_endpoint(&endpoint)
             .extensions_catalog()
             .await

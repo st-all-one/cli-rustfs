@@ -3,6 +3,14 @@
 //! A command-line interface for S3-compatible object storage services.
 //! Designed for RustFS and other S3-compatible backends.
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::large_stack_arrays,
+        reason = "launcher tests intentionally use multi-megabyte futures to exercise stack headroom"
+    )
+)]
+
 use clap::Parser;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 

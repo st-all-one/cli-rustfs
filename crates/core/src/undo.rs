@@ -137,7 +137,7 @@ pub fn plan_object_undo(
             }
             return Ok(UndoPlanItem {
                 key: key.to_string(),
-                expected_latest_version_id: latest.version_id.clone(),
+                expected_latest_version_id: latest.version_id,
                 action: UndoAction::RestoreVersion {
                     source_version_id: version_id.to_string(),
                 },
@@ -190,7 +190,7 @@ pub fn plan_object_undo(
 
     Ok(UndoPlanItem {
         key: key.to_string(),
-        expected_latest_version_id: latest.version_id.clone(),
+        expected_latest_version_id: latest.version_id,
         action,
     })
 }

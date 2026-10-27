@@ -84,7 +84,7 @@ struct RmOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub(crate) struct RemovalRecord {
+pub(super) struct RemovalRecord {
     path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     version_id: Option<String>,
@@ -117,7 +117,7 @@ struct RemovalFailureRecord {
 }
 
 #[derive(Debug)]
-pub(crate) struct RemovalError {
+pub(super) struct RemovalError {
     pub(crate) code: ExitCode,
     removed: Vec<RemovalRecord>,
     failed: Vec<RemovalFailureRecord>,
@@ -187,7 +187,7 @@ struct IncompletePathResult {
 }
 
 /// Execute the rm command
-pub async fn execute(args: RmArgs, output_config: OutputConfig) -> ExitCode {
+pub(super) async fn execute(args: RmArgs, output_config: OutputConfig) -> ExitCode {
     let formatter = Formatter::new(output_config);
     let version_output = uses_version_output(&args);
 
@@ -391,9 +391,8 @@ async fn execute_incomplete(args: &RmArgs, formatter: &Formatter) -> ExitCode {
         formatter.error_with_code(
             failure.exit_code,
             &format!(
-                "Failed to clean incomplete upload {}{}: {}",
+                "Failed to clean incomplete upload {}{upload_id}: {}",
                 formatter.sanitize_text(&failure.target),
-                upload_id,
                 failure.error
             ),
         );
@@ -417,7 +416,10 @@ fn failure_upload_id(failure: &RmIncompleteFailure) -> &str {
         .unwrap_or_default()
 }
 
-#[allow(clippy::result_large_err)]
+#[allow(
+    clippy::result_large_err,
+    reason = "CLI error payload carries structured user-facing context"
+)]
 async fn process_incomplete_path(
     path_str: &str,
     args: &RmArgs,
@@ -759,24 +761,23 @@ async fn process_rm_path(path_str: &str, args: &RmArgs, formatter: &Formatter) -
         }
     };
 
-    let alias = match alias_manager.get(&alias_name) {
-        Ok(a) => a,
-        Err(_) => {
-            let message = format!("Alias '{alias_name}' not found");
-            let code = report_rm_error(
-                formatter,
-                args,
-                ExitCode::NotFound,
-                &message,
-                Some(
-                    "Run `rc alias list` to inspect configured aliases or add one with `rc alias set ...`.",
-                ),
-            );
-            return Err(RemovalError::failed(
-                code,
-                removal_failure(path_str, args.version_id.clone(), code, message),
-            ));
-        }
+    let alias = if let Ok(a) = alias_manager.get(&alias_name) {
+        a
+    } else {
+        let message = format!("Alias '{alias_name}' not found");
+        let code = report_rm_error(
+            formatter,
+            args,
+            ExitCode::NotFound,
+            &message,
+            Some(
+                "Run `rc alias list` to inspect configured aliases or add one with `rc alias set ...`.",
+            ),
+        );
+        return Err(RemovalError::failed(
+            code,
+            removal_failure(path_str, args.version_id.clone(), code, message),
+        ));
     };
 
     // Create S3 client
@@ -890,7 +891,7 @@ async fn delete_single(
     }
 }
 
-pub(crate) async fn delete_recursive(
+pub(super) async fn delete_recursive(
     client: &S3Client,
     alias_name: &str,
     bucket: &str,
@@ -1069,14 +1070,14 @@ pub(crate) async fn delete_recursive(
         }
     }
 
-    if !failed.is_empty() {
+    if failed.is_empty() {
+        Ok(deleted)
+    } else {
         Err(RemovalError::partial(
             ExitCode::GeneralError,
             deleted,
             failed,
         ))
-    } else {
-        Ok(deleted)
     }
 }
 
@@ -1211,10 +1212,8 @@ async fn delete_versions(
                         args,
                         code,
                         &format!(
-                            "Failed to remove {} (version {}): {}",
-                            full_path,
-                            version_id.as_deref().unwrap_or("null"),
-                            message
+                            "Failed to remove {full_path} (version {}): {message}",
+                            version_id.as_deref().unwrap_or("null")
                         ),
                         None,
                     );
@@ -1230,8 +1229,7 @@ async fn delete_versions(
                         args,
                         ExitCode::GeneralError,
                         &format!(
-                            "Failed to remove {} (version {}): {message}",
-                            full_path,
+                            "Failed to remove {full_path} (version {}): {message}",
                             omitted.version_id.as_deref().unwrap_or("null")
                         ),
                         None,
@@ -1356,10 +1354,7 @@ async fn list_versions_for_removal(
 
 fn exit_code_for_delete_failure(code: Option<&str>, message: Option<&str>) -> ExitCode {
     let normalized_message = message.unwrap_or_default().to_ascii_lowercase();
-    if matches!(
-        code,
-        Some("NoSuchVersion") | Some("NoSuchKey") | Some("NotFound")
-    ) {
+    if matches!(code, Some("NoSuchVersion" | "NoSuchKey" | "NotFound")) {
         ExitCode::NotFound
     } else if normalized_message.contains("governance")
         || normalized_message.contains("retention")
@@ -1367,10 +1362,8 @@ fn exit_code_for_delete_failure(code: Option<&str>, message: Option<&str>) -> Ex
         || normalized_message.contains("worm")
     {
         ExitCode::Conflict
-    } else if matches!(
-        code,
-        Some("AccessDenied") | Some("Forbidden") | Some("Unauthorized")
-    ) || normalized_message.contains("access denied")
+    } else if matches!(code, Some("AccessDenied" | "Forbidden" | "Unauthorized"))
+        || normalized_message.contains("access denied")
         || normalized_message.contains("forbidden")
         || normalized_message.contains("unauthorized")
     {
@@ -1805,7 +1798,7 @@ mod tests {
             is_delete_marker: false,
         };
 
-        let data = build_version_remove_data(true, vec![planned.clone()], Vec::new());
+        let data = build_version_remove_data(true, vec![planned], Vec::new());
         let json = serde_json::to_value(data).expect("serialize version removal dry-run");
 
         assert_eq!(json["outcome"], "planned");

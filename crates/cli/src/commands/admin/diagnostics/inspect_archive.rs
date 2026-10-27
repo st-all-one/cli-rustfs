@@ -225,7 +225,7 @@ where
         biased;
         interrupt_result = &mut interrupt => {
             cancellation.cancel();
-            let _ = verification.await;
+            drop(verification.await);
             return interrupt_result.map_or_else(
                 |_| emit_archive_error(
                     &Error::General("Failed to monitor diagnostic archive interruption".to_string()),

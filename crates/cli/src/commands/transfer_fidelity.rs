@@ -9,7 +9,7 @@ use rc_core::{
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
-pub(crate) enum MetadataDirectiveArg {
+pub enum MetadataDirectiveArg {
     Copy,
     Replace,
 }
@@ -24,7 +24,7 @@ impl From<MetadataDirectiveArg> for rc_core::MetadataDirective {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
-pub(crate) enum TaggingDirectiveArg {
+pub enum TaggingDirectiveArg {
     Copy,
     Replace,
 }
@@ -40,7 +40,7 @@ impl From<TaggingDirectiveArg> for rc_core::TaggingDirective {
 
 /// Destination object policies shared by copy and pipe uploads.
 #[derive(Args, Clone, Debug, Default)]
-pub(crate) struct TransferFidelityArgs {
+pub struct TransferFidelityArgs {
     /// Cache policy stored with the destination object
     #[arg(long)]
     pub cache_control: Option<String>,
@@ -361,6 +361,6 @@ mod tests {
         }
         .build_write_options(None, None, None, None)
         .expect_err("beta10 checksum boundary");
-        assert!(matches!(unsupported, rc_core::Error::UnsupportedFeature(_)));
+        assert!(matches!(unsupported, Error::UnsupportedFeature(_)));
     }
 }

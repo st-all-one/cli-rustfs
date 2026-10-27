@@ -18,7 +18,7 @@ pub struct V3SuccessEnvelope<T> {
 }
 
 impl<T> V3SuccessEnvelope<T> {
-    pub fn versioned_objects(data: T) -> Self {
+    pub(crate) fn versioned_objects(data: T) -> Self {
         Self {
             schema_version: 3,
             family: VERSIONED_OBJECTS_FAMILY,
@@ -27,7 +27,7 @@ impl<T> V3SuccessEnvelope<T> {
         }
     }
 
-    pub fn locks(data: T) -> Self {
+    pub(crate) fn locks(data: T) -> Self {
         Self {
             schema_version: 3,
             family: LOCKS_FAMILY,
@@ -36,7 +36,7 @@ impl<T> V3SuccessEnvelope<T> {
         }
     }
 
-    pub fn bucket_operations(data: T) -> Self {
+    pub(crate) fn bucket_operations(data: T) -> Self {
         Self {
             schema_version: 3,
             family: BUCKET_OPERATIONS_FAMILY,
@@ -56,7 +56,7 @@ pub struct V3ErrorEnvelope {
 }
 
 impl V3ErrorEnvelope {
-    pub fn versioned_objects(
+    pub(crate) fn versioned_objects(
         code: ExitCode,
         message: impl Into<String>,
         capability: Option<&str>,
@@ -69,7 +69,11 @@ impl V3ErrorEnvelope {
         }
     }
 
-    pub fn locks(code: ExitCode, message: impl Into<String>, capability: Option<&str>) -> Self {
+    pub(crate) fn locks(
+        code: ExitCode,
+        message: impl Into<String>,
+        capability: Option<&str>,
+    ) -> Self {
         Self {
             schema_version: 3,
             family: LOCKS_FAMILY,
@@ -78,7 +82,7 @@ impl V3ErrorEnvelope {
         }
     }
 
-    pub fn bucket_operations(
+    pub(crate) fn bucket_operations(
         code: ExitCode,
         message: impl Into<String>,
         capability: Option<&str>,
@@ -103,7 +107,7 @@ pub struct V3PartialErrorEnvelope<T> {
 }
 
 impl<T> V3PartialErrorEnvelope<T> {
-    pub fn versioned_objects(
+    pub(crate) fn versioned_objects(
         code: ExitCode,
         message: impl Into<String>,
         capability: Option<&str>,
@@ -118,7 +122,7 @@ impl<T> V3PartialErrorEnvelope<T> {
         }
     }
 
-    pub fn bucket_operations(
+    pub(crate) fn bucket_operations(
         code: ExitCode,
         message: impl Into<String>,
         capability: Option<&str>,
