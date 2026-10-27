@@ -34,7 +34,7 @@ pub use rc_core::DeleteRequestOptions;
 use rc_core::admin::KmsDiagnosticStore;
 use rc_core::{
     AbortMultipartUploadRequest, Alias, BucketEncryption, BucketNotification,
-    BucketObjectLockConfiguration, Capabilities, ChecksumAlgorithm, ChecksumRequest,
+    BucketObjectLockConfiguration, Capabilities, ChecksumAlgorithm, ChecksumRequest, Clock,
     CopyObjectOptions, CorsRule, CreateBucketOptions, DefaultRetention, DeleteObjectFailure,
     DeleteObjectsResult, DeletedObject, Error, LegalHoldStatus, LifecycleRule,
     ListObjectVersionsOptions, ListOptions, ListResult, MetadataDirective, MultipartAbortStatus,
@@ -48,8 +48,8 @@ use rc_core::{
     ReplicationCheckStatus, ReplicationConfiguration, ReplicationResyncStartOptions,
     ReplicationResyncStartResult, ReplicationResyncState, ReplicationResyncStatus,
     ReplicationResyncTargetStatus, RequestHeader, Result, RetentionDuration, RetentionDurationUnit,
-    RetentionMode, SelectOptions, SseCustomerKey, TransferCopyOptions, TransferReadOptions,
-    global_request_headers, is_retryable_error, retry_with_backoff,
+    RetentionMode, SelectOptions, SseCustomerKey, SystemClock, TransferCopyOptions,
+    TransferReadOptions, global_request_headers, is_retryable_error, retry_with_backoff,
 };
 use reqwest::Method;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue, LOCATION};
@@ -57,6 +57,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWrite;
@@ -1655,6 +1656,7 @@ pub struct S3Client {
     xml_http_client: reqwest::Client,
     alias: Alias,
     request_headers: Vec<RequestHeader>,
+    clock: Arc<dyn Clock>,
 }
 
 #[derive(Debug, Clone)]
@@ -1687,6 +1689,14 @@ impl Intercept for CustomHeaderInterceptor {
 impl S3Client {
     /// Create a new S3 client from an alias configuration
     pub async fn new(alias: Alias) -> Result<Self> {
+        Self::with_clock(alias, Arc::new(SystemClock)).await
+    }
+
+    /// Create a new S3 client with an injected clock.
+    ///
+    /// Deterministic signing tests pass a fixed clock; the production
+    /// constructor installs [`SystemClock`].
+    pub async fn with_clock(alias: Alias, clock: Arc<dyn Clock>) -> Result<Self> {
         let endpoint = alias.endpoint.clone();
         let region = alias.region.clone();
         let access_key = alias.access_key.clone();
@@ -1776,6 +1786,7 @@ impl S3Client {
             xml_http_client,
             alias,
             request_headers,
+            clock,
         })
     }
 
@@ -3302,7 +3313,7 @@ impl S3Client {
             .identity(&identity)
             .region(region)
             .name(S3_SERVICE_NAME)
-            .time(std::time::SystemTime::now())
+            .time(self.clock.now_utc().into())
             .settings(signing_settings)
             .build()
             .map_err(|e| Error::Auth(format!("Failed to build signing params: {e}")))?;
@@ -6882,6 +6893,7 @@ mod tests {
             xml_http_client,
             alias,
             request_headers,
+            clock: Arc::new(SystemClock),
         };
 
         (client, request_receiver)
@@ -6938,6 +6950,7 @@ mod tests {
             xml_http_client: reqwest::Client::new(),
             alias,
             request_headers,
+            clock: Arc::new(SystemClock),
         };
         (client, replay)
     }
@@ -7067,6 +7080,7 @@ mod tests {
             xml_http_client: reqwest::Client::new(),
             alias,
             request_headers: Vec::new(),
+            clock: Arc::new(SystemClock),
         };
         (client, replay)
     }

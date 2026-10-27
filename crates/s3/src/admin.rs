@@ -56,14 +56,15 @@ use rc_core::admin::{
     SiteReplicationResyncStatus, SiteStatusOptions, StorageInfo, UpdateGroupMembersRequest,
     UpdateServiceAccountRequest, User, UserCredentialApi, UserMfaStatus, UserStatus,
 };
-use rc_core::{Alias, Error, Result};
+use rc_core::{Alias, Clock, Error, Result, SystemClock};
 use reqwest::header::{CACHE_CONTROL, CONTENT_TYPE, HOST, HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Client, Method, StatusCode};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use zeroize::{Zeroize, Zeroizing};
 
 struct SensitiveRequestBody(Zeroizing<Vec<u8>>);
@@ -269,11 +270,20 @@ pub struct AdminClient {
     region: String,
     anonymous: bool,
     transport_security_fingerprint: String,
+    clock: Arc<dyn Clock>,
 }
 
 impl AdminClient {
     /// Create a new AdminClient from an Alias
     pub fn new(alias: &Alias) -> Result<Self> {
+        Self::with_clock(alias, Arc::new(SystemClock))
+    }
+
+    /// Create a new AdminClient with an injected clock.
+    ///
+    /// Deterministic diagnostics and signing tests pass a fixed clock; the
+    /// production constructor installs [`SystemClock`].
+    pub fn with_clock(alias: &Alias, clock: Arc<dyn Clock>) -> Result<Self> {
         let mut builder = Client::builder()
             .danger_accept_invalid_certs(alias.insecure)
             .tls_built_in_native_certs(true)
@@ -356,12 +366,18 @@ impl AdminClient {
             region: alias.region.clone(),
             anonymous: alias.anonymous,
             transport_security_fingerprint,
+            clock,
         })
     }
 
     /// Build the base URL for admin API
     fn admin_url(&self, path: &str) -> String {
         format!("{}/rustfs/admin/v3{path}", self.endpoint)
+    }
+
+    /// Time source shared by signing and diagnostics.
+    pub(crate) fn clock(&self) -> &dyn Clock {
+        self.clock.as_ref()
     }
 
     fn admin_v4_url(&self, path: &str) -> String {
@@ -443,7 +459,7 @@ impl AdminClient {
             .identity(&identity)
             .region(&self.region)
             .name("s3")
-            .time(SystemTime::now())
+            .time(self.clock.now_utc().into())
             .settings(signing_settings)
             .build()
             .map_err(|e| Error::Auth(format!("Failed to build signing params: {e}")))?;
@@ -1957,6 +1973,64 @@ struct ServiceAccountInfo {
     implied_policy: Option<bool>,
 }
 
+fn sorted_users(response: UserListResponse) -> Vec<User> {
+    let mut users = response
+        .0
+        .into_iter()
+        .map(|(access_key, info)| {
+            let mut member_of = info.member_of.unwrap_or_default();
+            member_of.sort();
+            User {
+                access_key,
+                secret_key: None,
+                status: if info.status == "disabled" {
+                    UserStatus::Disabled
+                } else {
+                    UserStatus::Enabled
+                },
+                policy_name: info.policy_name,
+                member_of,
+            }
+        })
+        .collect::<Vec<_>>();
+    users.sort_by(|left, right| left.access_key.cmp(&right.access_key));
+    users
+}
+
+fn sorted_policies(response: PolicyListResponse) -> Vec<PolicyInfo> {
+    let mut policies = response
+        .0
+        .into_keys()
+        .map(|name| PolicyInfo { name })
+        .collect::<Vec<_>>();
+    policies.sort_by(|left, right| left.name.cmp(&right.name));
+    policies
+}
+
+fn sorted_group_names(mut groups: Vec<String>) -> Vec<String> {
+    groups.sort();
+    groups
+}
+
+fn sorted_service_accounts(accounts: Vec<ServiceAccountInfo>) -> Vec<ServiceAccount> {
+    let mut accounts = accounts
+        .into_iter()
+        .map(|account| ServiceAccount {
+            access_key: account.access_key,
+            secret_key: None,
+            parent_user: account.parent_user,
+            policy: None,
+            account_status: account.account_status,
+            expiration: account.expiration,
+            name: account.name,
+            description: account.description,
+            implied_policy: account.implied_policy,
+        })
+        .collect::<Vec<_>>();
+    accounts.sort_by(|left, right| left.access_key.cmp(&right.access_key));
+    accounts
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct BackgroundHealStatusResponse {
@@ -3435,11 +3509,14 @@ impl CapabilityApi for AdminClient {
 #[async_trait]
 impl OidcReadApi for AdminClient {
     async fn oidc_list_providers(&self) -> Result<OidcProviderList> {
-        let response: OidcProviderList =
+        let mut response: OidcProviderList =
             self.request_oidc(Method::GET, "/oidc/config", None).await?;
         response.validate_response().map_err(|_| {
             Error::General("RustFS returned an invalid OIDC provider list".to_string())
         })?;
+        response
+            .providers
+            .sort_by(|left, right| left.provider_id.cmp(&right.provider_id));
         Ok(response)
     }
 
@@ -4962,21 +5039,7 @@ impl AdminApi for AdminClient {
         let response: UserListResponse =
             self.request(Method::GET, "/list-users", None, None).await?;
 
-        Ok(response
-            .0
-            .into_iter()
-            .map(|(access_key, info)| User {
-                access_key,
-                secret_key: None,
-                status: if info.status == "disabled" {
-                    UserStatus::Disabled
-                } else {
-                    UserStatus::Enabled
-                },
-                policy_name: info.policy_name,
-                member_of: info.member_of.unwrap_or_default(),
-            })
-            .collect())
+        Ok(sorted_users(response))
     }
 
     async fn get_user(&self, access_key: &str) -> Result<User> {
@@ -5041,11 +5104,7 @@ impl AdminApi for AdminClient {
             .request(Method::GET, "/list-canned-policies", None, None)
             .await?;
 
-        Ok(response
-            .0
-            .into_keys()
-            .map(|name| PolicyInfo { name })
-            .collect())
+        Ok(sorted_policies(response))
     }
 
     async fn get_policy(&self, name: &str) -> Result<Policy> {
@@ -5113,7 +5172,7 @@ impl AdminApi for AdminClient {
 
     async fn list_groups(&self) -> Result<Vec<String>> {
         let response: Vec<String> = self.request(Method::GET, "/groups", None, None).await?;
-        Ok(response)
+        Ok(sorted_group_names(response))
     }
 
     async fn get_group(&self, name: &str) -> Result<Group> {
@@ -5194,22 +5253,9 @@ impl AdminApi for AdminClient {
             .request(Method::GET, "/list-service-accounts", query_ref, None)
             .await?;
 
-        Ok(response
-            .accounts
-            .unwrap_or_default()
-            .into_iter()
-            .map(|sa| ServiceAccount {
-                access_key: sa.access_key,
-                secret_key: None,
-                parent_user: sa.parent_user,
-                policy: None,
-                account_status: sa.account_status,
-                expiration: sa.expiration,
-                name: sa.name,
-                description: sa.description,
-                implied_policy: sa.implied_policy,
-            })
-            .collect())
+        Ok(sorted_service_accounts(
+            response.accounts.unwrap_or_default(),
+        ))
     }
 
     async fn get_service_account(&self, access_key: &str) -> Result<ServiceAccount> {
@@ -5665,6 +5711,7 @@ impl ReplicationInspectionApi for AdminClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rc_core::FixedClock;
     use rc_core::admin::{ClientDevnullRequest, DiagnosticApi};
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
@@ -5672,6 +5719,93 @@ mod tests {
     use std::thread;
     use std::time::Duration;
     use tempfile::tempdir;
+
+    #[test]
+    fn list_users_is_sorted_by_access_key_and_groups() {
+        let response = UserListResponse(HashMap::from([
+            (
+                "zeta".to_string(),
+                UserInfo {
+                    status: "enabled".to_string(),
+                    policy_name: None,
+                    member_of: Some(vec!["ops".to_string(), "dev".to_string()]),
+                },
+            ),
+            (
+                "alpha".to_string(),
+                UserInfo {
+                    status: "disabled".to_string(),
+                    policy_name: Some("readonly".to_string()),
+                    member_of: None,
+                },
+            ),
+        ]));
+
+        let users = sorted_users(response);
+
+        assert_eq!(
+            users
+                .iter()
+                .map(|user| user.access_key.as_str())
+                .collect::<Vec<_>>(),
+            ["alpha", "zeta"]
+        );
+        assert_eq!(users[0].status, UserStatus::Disabled);
+        assert_eq!(users[1].member_of, ["dev", "ops"]);
+    }
+
+    #[test]
+    fn list_policies_is_sorted_by_name() {
+        let response = PolicyListResponse(HashMap::from([
+            ("writer".to_string(), serde_json::Value::Null),
+            ("admin".to_string(), serde_json::Value::Null),
+        ]));
+
+        let policies = sorted_policies(response);
+
+        assert_eq!(
+            policies
+                .iter()
+                .map(|policy| policy.name.as_str())
+                .collect::<Vec<_>>(),
+            ["admin", "writer"]
+        );
+    }
+
+    #[test]
+    fn groups_and_service_accounts_are_sorted() {
+        assert_eq!(
+            sorted_group_names(vec!["ops".to_string(), "dev".to_string()]),
+            ["dev", "ops"]
+        );
+
+        let accounts = vec![
+            ServiceAccountInfo {
+                access_key: "zeta".to_string(),
+                parent_user: None,
+                account_status: None,
+                expiration: None,
+                name: None,
+                description: None,
+                implied_policy: None,
+            },
+            ServiceAccountInfo {
+                access_key: "alpha".to_string(),
+                parent_user: Some("alice".to_string()),
+                account_status: Some("enabled".to_string()),
+                expiration: None,
+                name: None,
+                description: None,
+                implied_policy: None,
+            },
+        ];
+
+        let accounts = sorted_service_accounts(accounts);
+
+        assert_eq!(accounts[0].access_key, "alpha");
+        assert_eq!(accounts[1].access_key, "zeta");
+        assert_eq!(accounts[0].parent_user.as_deref(), Some("alice"));
+    }
 
     #[derive(Debug)]
     struct CapturedAdminRequest {
@@ -6124,6 +6258,26 @@ mod tests {
                 "127.0.0.1:9300",
             );
         }
+    }
+
+    #[tokio::test]
+    async fn signing_uses_the_injected_clock() {
+        let alias = Alias::new("test", "http://127.0.0.1:9300", "access", "secret");
+        let clock = FixedClock::from_unix_seconds(1_700_000_000).expect("fixed clock");
+        let client =
+            AdminClient::with_clock(&alias, Arc::new(clock)).expect("admin client should build");
+        let headers = client.request_headers(b"").expect("request headers");
+        let signed = client
+            .sign_request(
+                &Method::GET,
+                "http://127.0.0.1:9300/rustfs/admin/v3/info",
+                &headers,
+                b"",
+            )
+            .await
+            .expect("sign Admin request");
+
+        assert_eq!(signed["x-amz-date"], "20231114T221320Z");
     }
 
     #[tokio::test]

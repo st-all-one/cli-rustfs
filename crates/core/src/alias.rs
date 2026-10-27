@@ -3,14 +3,14 @@
 //! Aliases are named references to S3-compatible storage endpoints,
 //! including connection details and credentials.
 
-use std::env;
-use std::sync::{OnceLock, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 
 use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::config::ConfigManager;
 use crate::error::{Error, Result};
+use crate::ports::{Env, ProcessEnv};
 
 const RC_HOST_PREFIX: &str = "RC_HOST_";
 const CUSTOM_HEADER_PREFIX: &str = "x-amz-";
@@ -284,22 +284,22 @@ fn env_alias_var_name(name: &str) -> String {
     format!("{RC_HOST_PREFIX}{name}")
 }
 
-fn env_alias(name: &str) -> Result<Option<Alias>> {
+fn env_alias(env: &dyn Env, name: &str) -> Result<Option<Alias>> {
     let var_name = env_alias_var_name(name);
-    let Some(value) = env::var_os(&var_name) else {
+    let Some(value) = env.var_os(&var_name) else {
         return Ok(None);
     };
 
     let value = value
-        .into_string()
-        .map_err(|_| Error::Config(format!("{var_name} must be valid UTF-8")))?;
-    parse_env_alias(name, &value).map(Some)
+        .to_str()
+        .ok_or_else(|| Error::Config(format!("{var_name} must be valid UTF-8")))?;
+    parse_env_alias(name, value).map(Some)
 }
 
-fn env_aliases() -> Result<Vec<Alias>> {
+fn env_aliases(env: &dyn Env) -> Result<Vec<Alias>> {
     let mut vars = Vec::new();
 
-    for (key, value) in env::vars_os() {
+    for (key, value) in env.vars_os() {
         let Ok(key) = key.into_string() else {
             continue;
         };
@@ -447,30 +447,42 @@ fn merge_env_aliases(mut aliases: Vec<Alias>, env_aliases: Vec<Alias>) -> Vec<Al
 /// Manager for alias operations
 pub struct AliasManager {
     config_manager: ConfigManager,
+    env: Arc<dyn Env>,
 }
 
 impl AliasManager {
     /// Create a new AliasManager with a specific ConfigManager
     pub fn with_config_manager(config_manager: ConfigManager) -> Self {
-        Self { config_manager }
+        Self::with_config_manager_and_env(config_manager, Arc::new(ProcessEnv))
+    }
+
+    /// Create an AliasManager whose environment aliases come from an injected port.
+    pub fn with_config_manager_and_env(config_manager: ConfigManager, env: Arc<dyn Env>) -> Self {
+        Self {
+            config_manager,
+            env,
+        }
     }
 
     /// Create a new AliasManager using the default config location
     pub fn new() -> Result<Self> {
         let config_manager = ConfigManager::new()?;
-        Ok(Self { config_manager })
+        Ok(Self {
+            config_manager,
+            env: Arc::new(ProcessEnv),
+        })
     }
 
     /// List all configured aliases
     pub fn list(&self) -> Result<Vec<Alias>> {
         let config = self.config_manager.load()?;
-        let env_aliases = env_aliases()?;
+        let env_aliases = env_aliases(self.env.as_ref())?;
         Ok(merge_env_aliases(config.aliases, env_aliases))
     }
 
     /// Get an alias by name
     pub fn get(&self, name: &str) -> Result<Alias> {
-        if let Some(alias) = env_alias(name)? {
+        if let Some(alias) = env_alias(self.env.as_ref(), name)? {
             return Ok(alias);
         }
 
@@ -549,7 +561,7 @@ impl AliasManager {
 
     /// Check if an alias exists
     pub fn exists(&self, name: &str) -> Result<bool> {
-        if env_alias(name)?.is_some() {
+        if env_alias(self.env.as_ref(), name)?.is_some() {
             return Ok(true);
         }
 
@@ -561,6 +573,7 @@ impl AliasManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ports::MapEnv;
     use tempfile::TempDir;
 
     fn temp_alias_manager() -> (AliasManager, TempDir) {
@@ -569,6 +582,22 @@ mod tests {
         let config_manager = ConfigManager::with_path(config_path);
         let alias_manager = AliasManager::with_config_manager(config_manager);
         (alias_manager, temp_dir)
+    }
+
+    #[test]
+    fn injected_environment_aliases_do_not_read_process_env() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_manager = ConfigManager::with_path(temp_dir.path().join("config.toml"));
+        let env = MapEnv::new([(
+            "RC_HOST_injected",
+            "https://access:secret@injected.local:9000",
+        )]);
+        let manager = AliasManager::with_config_manager_and_env(config_manager, Arc::new(env));
+
+        assert!(manager.exists("injected").expect("exists"));
+        let alias = manager.get("injected").expect("alias");
+        assert_eq!(alias.endpoint, "https://injected.local:9000");
+        assert_eq!(manager.list().expect("list").len(), 1);
     }
 
     #[test]

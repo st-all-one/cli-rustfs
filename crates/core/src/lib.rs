@@ -35,6 +35,7 @@ pub mod object_key;
 pub mod object_lock;
 pub mod ops;
 pub mod path;
+pub mod ports;
 pub mod replication;
 pub mod retry;
 pub mod select;
@@ -73,6 +74,10 @@ pub use ops::{
     UsageScanRequest, UsageScope, UsageSnapshotApi, UsageSource,
 };
 pub use path::{ParsedPath, RemotePath, parse_object_path, parse_path};
+pub use ports::{
+    Clock, Entropy, Env, FixedClock, MapEnv, OsEntropy, ProcessEnv, SeededEntropy, SystemClock,
+    source_date_epoch_from_env, source_date_epoch_timestamp,
+};
 pub use replication::{
     BucketTarget, BucketTargetCredentials, ReplicationCheckPhase, ReplicationCheckPhaseState,
     ReplicationCheckPhases, ReplicationCheckResult, ReplicationCheckStatus, ReplicationCheckTarget,

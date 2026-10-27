@@ -1,12 +1,11 @@
 //! Object retention commands with `mc retention` compatible entry points.
 
-use std::time::SystemTime;
-
 use clap::{Args, Subcommand};
 use jiff::{Span, Timestamp, tz::TimeZone};
 use rc_core::{
-    ObjectLockOptions, ObjectRetention, ObjectStore as _, RetentionDuration, RetentionDurationUnit,
-    RetentionMode, parse_object_path,
+    Clock, ObjectLockOptions, ObjectRetention, ObjectStore as _, ProcessEnv, RetentionDuration,
+    RetentionDurationUnit, RetentionMode, SystemClock, parse_object_path,
+    source_date_epoch_from_env,
 };
 
 use crate::exit_code::ExitCode;
@@ -380,19 +379,12 @@ async fn execute_clear(args: ClearRetentionArgs, output_config: OutputConfig) ->
 }
 
 fn current_timestamp() -> Result<Timestamp, String> {
-    if let Some(raw) = std::env::var_os("SOURCE_DATE_EPOCH") {
-        return timestamp_from_source_date_epoch(&raw.to_string_lossy());
+    if let Some(timestamp) =
+        source_date_epoch_from_env(&ProcessEnv).map_err(|error| error.to_string())?
+    {
+        return Ok(timestamp);
     }
-    Timestamp::try_from(SystemTime::now())
-        .map_err(|error| format!("System clock is outside the supported UTC range: {error}"))
-}
-
-fn timestamp_from_source_date_epoch(raw: &str) -> Result<Timestamp, String> {
-    let seconds = raw
-        .parse::<i64>()
-        .map_err(|error| format!("SOURCE_DATE_EPOCH must be Unix seconds: {error}"))?;
-    Timestamp::from_second(seconds)
-        .map_err(|error| format!("SOURCE_DATE_EPOCH is outside the supported UTC range: {error}"))
+    Ok(SystemClock.now_utc())
 }
 
 fn parse_object_validity(value: &str, now: Timestamp) -> Result<Timestamp, String> {
@@ -501,18 +493,19 @@ fn validate_retention_change(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use rc_core::source_date_epoch_timestamp;
+
     #[test]
     fn source_date_epoch_is_parsed_as_utc_seconds() {
-        let timestamp = timestamp_from_source_date_epoch("0").expect("epoch");
+        let timestamp = source_date_epoch_timestamp("0").expect("epoch");
         assert_eq!(timestamp.as_second(), 0);
     }
 
     #[test]
     fn invalid_source_date_epoch_is_rejected() {
-        assert!(timestamp_from_source_date_epoch("not-a-number").is_err());
+        assert!(source_date_epoch_timestamp("not-a-number").is_err());
     }
-
-    use super::*;
 
     fn timestamp(value: &str) -> Timestamp {
         value.parse().expect("valid test timestamp")

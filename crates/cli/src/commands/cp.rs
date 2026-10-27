@@ -8,7 +8,7 @@ use rc_core::alias::RetryConfig;
 use rc_core::{
     AliasManager, Error, MetadataDirective, MultipartCopyCancellation, MultipartCopyOptions,
     ObjectAttributes, ObjectEncryptionRequest, ObjectInfo, ObjectKeyPolicy, ObjectStore as _,
-    ObjectWriteOptions, ParsedPath, RemotePath, SseCustomerKey, TransferCancellation,
+    ObjectWriteOptions, ParsedPath, RemotePath, SseCustomerKey, SystemClock, TransferCancellation,
     TransferCandidate, TransferControls, TransferCopyOptions, TransferExecutor,
     TransferOutcomeState, TransferPlan, TransferReadOptions, TransferSelection,
     normalize_relative_key, parse_path, relative_local_path_from_key,
@@ -1777,6 +1777,7 @@ fn build_transfer_controls(args: &CpArgs) -> Result<TransferControls, String> {
                 .unwrap_or(DEFAULT_RETRY_MAX_BACKOFF_MS),
         },
         continue_on_error: args.continue_on_error,
+        clock: Arc::new(SystemClock),
     };
     controls.validate().map_err(|error| error.to_string())?;
     Ok(controls)
@@ -2695,7 +2696,7 @@ async fn upload_directory(
     fn walk_dir(dir: &Path, base: &Path) -> std::io::Result<Vec<(PathBuf, String)>> {
         let mut files = Vec::new();
         let mut entries = fs::read_dir(dir)?.collect::<std::io::Result<Vec<_>>>()?;
-        entries.sort_by_key(std::fs::DirEntry::file_name);
+        entries.sort_by_key(fs::DirEntry::file_name);
         for entry in entries {
             let path = entry.path();
             if path.is_file() {
@@ -3602,6 +3603,33 @@ mod tests {
 
         assert!(result.is_err());
         assert!(files.is_empty());
+    }
+
+    #[test]
+    fn recursive_source_collection_is_sorted_by_file_name() {
+        let root = tempfile::tempdir().expect("create source root");
+        let nested = root.path().join("nested");
+        std::fs::create_dir(&nested).expect("create nested directory");
+        for (name, bytes) in [
+            ("z.txt", b"z".as_slice()),
+            ("m.txt", b"m".as_slice()),
+            ("a.txt", b"a".as_slice()),
+            ("nested/y.txt", b"y".as_slice()),
+            ("nested/b.txt", b"b".as_slice()),
+        ] {
+            std::fs::write(root.path().join(name), bytes).expect("write fixture");
+        }
+        let mut files = Vec::new();
+
+        collect_local_files(root.path(), root.path(), &mut files).expect("collect files");
+
+        assert_eq!(
+            files
+                .iter()
+                .map(|(_, relative, _)| relative.as_str())
+                .collect::<Vec<_>>(),
+            ["a.txt", "m.txt", "nested/b.txt", "nested/y.txt", "z.txt"]
+        );
     }
 
     #[test]

@@ -453,9 +453,10 @@ fn safe_error_component(value: String) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     use futures::stream;
-    use rc_core::{Alias, WatchFrame};
+    use rc_core::{Alias, FixedClock, WatchFrame};
 
     use super::*;
 
@@ -634,6 +635,29 @@ mod tests {
             .block_on(client.signed_watch_headers(&url))
             .expect("bucket request should sign");
         assert!(headers.contains_key("authorization"));
+    }
+
+    #[test]
+    fn xml_signing_uses_the_injected_clock() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime should build");
+        let clock = FixedClock::from_unix_seconds(1_700_000_000).expect("fixed clock");
+        let client = runtime
+            .block_on(S3Client::with_clock(
+                Alias::new("local", "https://example.com", "access-key", "secret-key"),
+                Arc::new(clock),
+            ))
+            .expect("client should build");
+        let url = client
+            .watch_url(&request(None))
+            .expect("root URL should build");
+        let headers = runtime
+            .block_on(client.signed_watch_headers(&url))
+            .expect("root request should sign");
+
+        assert_eq!(headers["x-amz-date"], "20231114T221320Z");
     }
 
     #[test]

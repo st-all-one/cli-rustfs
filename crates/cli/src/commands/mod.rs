@@ -543,7 +543,7 @@ pub async fn execute(cli: Cli) -> ExitCode {
             )
             .await
         }
-        Commands::Completions(args) => completions::execute(args),
+        Commands::Completions(args) => completions::execute(args, &rc_core::ProcessEnv),
         Commands::Watch(args) => {
             watch::execute(args, output_options.resolve(OutputBehavior::HumanDefault)).await
         }

@@ -9,16 +9,26 @@ Progress as of the current implementation pass:
   determinism job in CI.
 - D1 started: `uninlined_format_args` and several rustc visibility/
   qualification suggestions were applied mechanically. The diagnostic inventory
-  dropped from 11,231 to roughly 9,480.
+  dropped from 11,231 to 9,471.
 - D2/T1 started: retry jitter no longer reads `SystemTime::now`; backoff is now
   stable for a fixed attempt/config.
 - D6/T2 started: alias list output is sorted for both JSON and human formats,
   recursive local copy traversal is sorted, persisted multipart completed parts
   are canonicalized by part number, pending upload lookup is sorted by upload id.
 - T3/T5 started: `SOURCE_DATE_EPOCH` is honored by retention timestamp parsing.
+- D2/T1 continued: `Clock`, `Entropy` and `Env` ports live in
+  `crates/core/src/ports.rs`. Transfer pacing, KMS diagnostics, admin
+  health/devnull diagnostics and SigV4 signing (admin and XML paths) take the
+  clock from a port; config resolution and alias environment lookup accept an
+  injected environment; IAM and bucket-metadata ZIP exports honor
+  `SOURCE_DATE_EPOCH`.
+- D3 continued: CI runs the determinism contract twice, with
+  `TOKIO_WORKER_THREADS=1` and `4`, under `SOURCE_DATE_EPOCH=0`. The strict
+  clippy command remains an explicitly non-blocking preview until the ratchet is
+  paid down.
 - The determinism contract test suite exists and passes locally:
   `crates/cli/tests/determinism_contract.rs`.
-- The full workspace suite passes after these changes: 2,700 tests, 0 failures.
+- The full workspace suite passes after these changes: 2,721 tests, 0 failures.
 
 This document defines what must be done before rc can claim, objectively:
 
@@ -116,9 +126,9 @@ cargo clippy --workspace --all-targets --message-format=json
 
 Current result at the time of writing:
 
-- clippy exits 0, but emits **11,231 compiler diagnostics** across all targets;
-- the short-format run reports about **4,442 warning lines**;
-- CI currently runs clippy **without** `-D warnings`;
+- clippy exits 0, but emits **9,471 compiler diagnostics** across all targets;
+- CI runs the strict clippy command but keeps it non-blocking, and publishes the
+  per-lint inventory to the job summary;
 - `pedantic` and `nursery` are currently `warn`;
 - several restrictions are currently `warn` instead of `deny`;
 - tests have a shared allow header for `expect_used`, `unwrap_used`, `panic`,
@@ -128,25 +138,19 @@ Top current diagnostics (all targets):
 
 | count | diagnostic |
 |---:|---|
-| 3,343 | `missing_docs` |
-| 1,293 | `unreachable_pub` |
-| 1,089 | `clippy::large_futures` |
-| 833 | `clippy::absolute_paths` |
+| 3,325 | `missing_docs` |
+| 1,091 | `clippy::large_futures` |
+| 914 | `unreachable_pub` |
+| 783 | `clippy::absolute_paths` |
 | 648 | `clippy::arithmetic_side_effects` |
-| 623 | `clippy::uninlined_format_args` |
 | 484 | `clippy::indexing_slicing` |
 | 468 | `clippy::fn_params_excessive_bools` |
-| 454 | `clippy::as_conversions` |
+| 448 | `clippy::as_conversions` |
 | 310 | `clippy::struct_excessive_bools` |
-| 273 | `unused_qualifications` |
 | 167 | `clippy::cast_precision_loss` |
 | 160 | `clippy::manual_let_else` |
-| 118 | `clippy::single_match_else` |
 | 104 | `clippy::cast_sign_loss` |
 | 98 | `clippy::needless_pass_by_value` |
-| 98 | `clippy::redundant_pub_crate` |
-| 64 | `clippy::unnested_or_patterns` |
-| 52 | `clippy::redundant_closure_for_method_calls` |
 | 42 | `clippy::format_push_string` |
 | 41 | `clippy::let_underscore_untyped` |
 | 40 | `clippy::cast_possible_truncation` |
@@ -154,8 +158,12 @@ Top current diagnostics (all targets):
 | 36 | `clippy::cast_possible_wrap` |
 | 32 | `clippy::unused_self` |
 | 32 | `clippy::let_underscore_must_use` |
-| 28 | `clippy::redundant_clone` |
 | 26 | `clippy::unreachable` |
+| 24 | `clippy::redundant_pub_crate` |
+| 21 | `clippy::unreadable_literal` |
+| 16 | `clippy::unnecessary_wraps` |
+| 16 | `clippy::unused_async_trait_impl` |
+| 16 | `clippy::unused_async` |
 
 This table is a snapshot, not a permanent budget. Re-run the command after every
 remediation PR and keep the count moving monotonically to zero.
@@ -308,13 +316,13 @@ keeps the warning count monotonically decreasing.
 
 ### C0 — Make the gate visible
 
-- [ ] Add `clippy-strict` target:
+- [x] Add `clippy-strict` target:
   `cargo clippy --workspace --all-targets -- -D warnings`.
-- [ ] Change CI clippy job to the strict target.
+- [x] Change CI clippy job to the strict target.
 - [ ] Add `RUSTFLAGS="-D warnings"` to the clippy CI job only.
-- [ ] Keep the existing `clippy` ratchet target temporarily for local work.
-- [ ] Add a CI artifact with the current warning count per lint, so progress is
-  measurable.
+- [x] Keep the existing `clippy` ratchet target temporarily for local work.
+- [x] Add a CI job summary with the current warning count per lint, so progress
+  is measurable.
 
 ### C1 — Mechanical lints (auto-fixable or low risk)
 
@@ -597,6 +605,22 @@ Completed in the first implementation pass:
 - [x] Made lifecycle rule IDs deterministic from the target, state and rule body.
 - [x] Added `SOURCE_DATE_EPOCH` support to retention timestamp parsing.
 - [x] Applied `uninlined_format_args` and other machine-applicable cleanup.
+- [x] Added `crates/core/src/ports.rs` with `Clock`, `Entropy` and `Env` ports,
+  plus real (`SystemClock`, `OsEntropy`, `ProcessEnv`) and deterministic
+  (`FixedClock`, `SeededEntropy`, `MapEnv`) implementations.
+- [x] Injected the clock into transfer rate pacing, KMS diagnostics, admin
+  health/devnull measurements and SigV4 request signing (admin and XML paths).
+- [x] Injected entropy into the KMS diagnostic and injected the environment into
+  config directory resolution and alias environment lookup.
+- [x] Applied `SOURCE_DATE_EPOCH` to IAM and bucket-metadata ZIP exports.
+- [x] Sorted admin user, policy, group, service-account and OIDC provider lists
+  returned as unordered maps or arrays, including user group membership.
+- [x] Injected the environment port into completion installation path
+  resolution.
+- [x] Added a CI determinism job that repeats the contract with
+  `TOKIO_WORKER_THREADS=1` and `4` under `SOURCE_DATE_EPOCH=0`, and marked the
+  strict clippy preview explicitly non-blocking.
+- [x] Published the per-lint clippy inventory to the CI job summary.
 - [x] Verified the full workspace test suite after the changes.
 
 Still open:
@@ -604,13 +628,18 @@ Still open:
 - [ ] Strict clippy has zero warnings (`make clippy-strict` still fails).
 - [ ] CI strict clippy is blocking rather than `continue-on-error`.
 - [ ] The warning ratchet and test blanket allowances are removed.
-- [ ] Clock/jitter/environment ports cover transfer, admin diagnostics, request
-  signing and archive paths.
+- [ ] Clock ports still do not cover the AWS SDK native signing/presigning path,
+  and ILM timeout polling uses process time by design.
+- [ ] Jitter remains deterministic but has no injectable per-request seed.
+- [ ] `std::env` reads remain in secret input and the platform default config
+  directory fallback.
 - [ ] Observable `HashMap`/`HashSet` iteration is audited and removed.
 - [ ] All `read_dir` sites are covered by tests for non-canonical filesystem
   order.
-- [ ] Concurrency matrix (`TOKIO_WORKER_THREADS=1` and N) is part of CI.
-- [ ] `SOURCE_DATE_EPOCH` is applied to archive/export artifacts.
+- [ ] `InspectArchiveKey::generate` and archive key wrapping intentionally use
+  OS entropy; encrypted diagnostic archive bytes are explicitly non-contractual.
+- [ ] `SOURCE_DATE_EPOCH` applies to client-generated ZIP exports only; archive
+  formats produced by the server depend on server support.
 - [ ] Performance A/B is re-run after the determinism changes.
 
 ## 10. Acceptance checklist

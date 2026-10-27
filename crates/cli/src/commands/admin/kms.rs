@@ -7,7 +7,7 @@ use rc_core::admin::{
     KmsKeyPage, KmsKeyState, KmsKeyUsage, KmsRoundTripReport, KmsServiceState, KmsStatus,
     run_kms_round_trip,
 };
-use rc_core::{Error, Result};
+use rc_core::{Error, OsEntropy, Result, SystemClock};
 use rc_s3::{AdminClient, S3Client};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -373,7 +373,7 @@ async fn execute_roundtrip_with_store(
     store: &dyn KmsDiagnosticStore,
     formatter: &Formatter,
 ) -> ExitCode {
-    match run_kms_round_trip(store, bucket, key_id).await {
+    match run_kms_round_trip(store, &SystemClock, &OsEntropy, bucket, key_id).await {
         Ok(report) => {
             if formatter.is_json() {
                 formatter.json(&KmsSuccessOutput {

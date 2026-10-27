@@ -2,13 +2,13 @@
 //!
 //! Generate shell completion scripts for bash, zsh, fish, and powershell.
 
-use std::env;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use clap::CommandFactory;
 use clap_complete::{Generator, Shell};
+use rc_core::Env;
 
 use super::Cli;
 use crate::exit_code::ExitCode;
@@ -34,7 +34,7 @@ pub struct CompletionsArgs {
 }
 
 /// Generate shell completions and either print or install them
-pub(super) fn execute(args: CompletionsArgs) -> ExitCode {
+pub(super) fn execute(args: CompletionsArgs, env: &dyn Env) -> ExitCode {
     let completion = generate_completions(args.shell);
     if !args.install {
         if let Err(error) = io::stdout().write_all(&completion) {
@@ -44,7 +44,7 @@ pub(super) fn execute(args: CompletionsArgs) -> ExitCode {
         return ExitCode::Success;
     }
 
-    let destination = match completion_path(args.shell, args.install_dir.as_deref()) {
+    let destination = match completion_path(args.shell, args.install_dir.as_deref(), env) {
         Ok(path) => path,
         Err(error) => {
             eprintln!("Failed to determine completion installation path: {error}");
@@ -72,7 +72,7 @@ fn generate_completions<G: Generator>(generator: G) -> Vec<u8> {
     output
 }
 
-fn completion_path(shell: Shell, install_dir: Option<&Path>) -> io::Result<PathBuf> {
+fn completion_path(shell: Shell, install_dir: Option<&Path>, env: &dyn Env) -> io::Result<PathBuf> {
     let file_name = match shell {
         Shell::Bash => "rc",
         Shell::Elvish => "rc.elv",
@@ -90,16 +90,18 @@ fn completion_path(shell: Shell, install_dir: Option<&Path>) -> io::Result<PathB
         return Ok(directory.join(file_name));
     }
 
-    let home = env::var_os("HOME").map(PathBuf::from).ok_or_else(|| {
+    let home = env.var_os("HOME").map(PathBuf::from).ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::NotFound,
             "HOME is not set; pass --install-dir explicitly",
         )
     })?;
-    let data_home = env::var_os("XDG_DATA_HOME")
+    let data_home = env
+        .var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| home.join(".local/share"));
-    let config_home = env::var_os("XDG_CONFIG_HOME")
+    let config_home = env
+        .var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|| home.join(".config"));
 
@@ -142,6 +144,8 @@ fn install_completions(destination: &Path, contents: &[u8], force: bool) -> io::
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rc_core::MapEnv;
+    use std::ffi::OsString;
 
     #[test]
     fn test_completions_bash() {
@@ -178,21 +182,39 @@ mod tests {
     #[test]
     fn install_uses_shell_specific_file_name() {
         let directory = tempfile::tempdir().unwrap();
+        let env = MapEnv::default();
         assert_eq!(
-            completion_path(Shell::Bash, Some(directory.path())).unwrap(),
+            completion_path(Shell::Bash, Some(directory.path()), &env).unwrap(),
             directory.path().join("rc")
         );
         assert_eq!(
-            completion_path(Shell::Zsh, Some(directory.path())).unwrap(),
+            completion_path(Shell::Zsh, Some(directory.path()), &env).unwrap(),
             directory.path().join("_rc")
         );
         assert_eq!(
-            completion_path(Shell::Fish, Some(directory.path())).unwrap(),
+            completion_path(Shell::Fish, Some(directory.path()), &env).unwrap(),
             directory.path().join("rc.fish")
         );
         assert_eq!(
-            completion_path(Shell::PowerShell, Some(directory.path())).unwrap(),
+            completion_path(Shell::PowerShell, Some(directory.path()), &env).unwrap(),
             directory.path().join("rc.ps1")
+        );
+    }
+
+    #[test]
+    fn completion_path_reads_the_injected_environment() {
+        let env = MapEnv::new([
+            ("HOME", OsString::from("/home/tester")),
+            ("XDG_CONFIG_HOME", OsString::from("/config")),
+        ]);
+
+        assert_eq!(
+            completion_path(Shell::Bash, None, &env).unwrap(),
+            PathBuf::from("/home/tester/.local/share/bash-completion/completions/rc")
+        );
+        assert_eq!(
+            completion_path(Shell::Fish, None, &env).unwrap(),
+            PathBuf::from("/config/fish/completions/rc.fish")
         );
     }
 

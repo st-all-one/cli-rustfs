@@ -10,7 +10,7 @@ use jiff::Timestamp;
 use rc_core::alias::RetryConfig;
 use rc_core::{
     AliasManager, Error, ListOptions, ObjectAttributes, ObjectInfo, ObjectKeyPolicy,
-    ObjectStore as _, ObjectWriteOptions, ParsedPath, RemotePath, TransferCandidate,
+    ObjectStore as _, ObjectWriteOptions, ParsedPath, RemotePath, SystemClock, TransferCandidate,
     TransferControls, TransferExecutor, TransferOutcomeState, TransferPlan, TransferReport,
     TransferSelection, TransferSummary, normalize_relative_key, parse_path,
 };
@@ -927,6 +927,7 @@ fn build_controls(args: &MirrorArgs) -> Result<TransferControls, String> {
             max_backoff_ms: args.retry_max_backoff_ms,
         },
         continue_on_error: args.continue_on_error,
+        clock: Arc::new(SystemClock),
     };
     controls.validate().map_err(|error| error.to_string())?;
     Ok(controls)

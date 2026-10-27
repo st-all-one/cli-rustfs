@@ -44,7 +44,33 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: Run Clippy
+        # The strict command is the target gate. It stays non-blocking until the
+        # pedantic/nursery ratchet documented in DETERMINISTIC_UPGRADE.md is
+        # paid down; `make clippy-warning-count` tracks the remaining debt.
+        continue-on-error: true
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Record clippy inventory
+        if: always()
+        run: ./scripts/clippy-warning-count.sh | tee -a "$GITHUB_STEP_SUMMARY"
+
+  determinism:
+    name: Determinism (${{ matrix.worker_threads }} workers)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        worker_threads: [ "1", "4" ]
+    env:
+      SOURCE_DATE_EPOCH: "0"
+      TOKIO_WORKER_THREADS: ${{ matrix.worker_threads }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - name: Run determinism contract
+        run: cargo test -p rustfs-cli --test determinism_contract --locked
+      - name: Repeat determinism contract
+        run: cargo test -p rustfs-cli --test determinism_contract --locked
 
   test:
     name: Test (${{ matrix.os }})

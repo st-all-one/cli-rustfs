@@ -19,6 +19,7 @@ use tokio::time::{Instant, sleep, sleep_until};
 
 use crate::alias::RetryConfig;
 use crate::error::{Error, Result};
+use crate::ports::{Clock, SystemClock};
 use crate::retry::{calculate_backoff, is_retryable_error};
 
 /// A storage-independent item that can be selected and executed as part of a transfer.
@@ -163,6 +164,8 @@ pub struct TransferControls {
     pub bytes_per_second: Option<u64>,
     pub retry: RetryConfig,
     pub continue_on_error: bool,
+    /// Time source used by rate pacing; inject a fake in deterministic runs.
+    pub clock: Arc<dyn Clock>,
 }
 
 impl TransferControls {
@@ -199,6 +202,7 @@ impl Default for TransferControls {
             bytes_per_second: None,
             retry: RetryConfig::default(),
             continue_on_error: false,
+            clock: Arc::new(SystemClock),
         }
     }
 }
@@ -317,7 +321,10 @@ impl TransferExecutor {
         let mut summary = plan.summary;
         let items = plan.items;
         let operation = Arc::new(operation);
-        let rate_gate = Arc::new(RateGate::new(self.controls.bytes_per_second));
+        let rate_gate = Arc::new(RateGate::new(
+            self.controls.bytes_per_second,
+            Arc::clone(&self.controls.clock),
+        ));
         let mut in_flight = FuturesUnordered::new();
         let mut completed = BTreeMap::new();
         let mut next_index = 0usize;
@@ -483,13 +490,15 @@ where
 struct RateGate {
     bytes_per_second: Option<u64>,
     next_slot: Mutex<Instant>,
+    clock: Arc<dyn Clock>,
 }
 
 impl RateGate {
-    fn new(bytes_per_second: Option<u64>) -> Self {
+    fn new(bytes_per_second: Option<u64>, clock: Arc<dyn Clock>) -> Self {
         Self {
             bytes_per_second,
-            next_slot: Mutex::new(Instant::now()),
+            next_slot: Mutex::new(clock.now_monotonic().into()),
+            clock,
         }
     }
 
@@ -503,14 +512,15 @@ impl RateGate {
 
         let wait_until = {
             let mut next_slot = self.next_slot.lock().await;
-            let now = Instant::now();
+            let now: Instant = self.clock.now_monotonic().into();
             let wait_until = (*next_slot).max(now);
             let delay = rate_duration(bytes, bytes_per_second);
             *next_slot = wait_until.checked_add(delay).unwrap_or(wait_until);
             wait_until
         };
 
-        if wait_until > Instant::now() {
+        let now: Instant = self.clock.now_monotonic().into();
+        if wait_until > now {
             sleep_until(wait_until).await;
         }
     }

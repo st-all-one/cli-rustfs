@@ -1,5 +1,4 @@
 use std::io;
-use std::time::Instant;
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -163,7 +162,7 @@ impl AdminClient {
         request: ClientDevnullRequest,
     ) -> Result<ClientDevnullResult> {
         let payload_hash = client_devnull_payload_hash(request.bytes_per_request());
-        let started = Instant::now();
+        let started = self.clock.now_monotonic();
         let requests = (0..request.concurrency())
             .map(|_| self.client_devnull_once(request.bytes_per_request(), payload_hash.as_str()));
         let received = tokio::time::timeout(request.timeout(), try_join_all(requests))

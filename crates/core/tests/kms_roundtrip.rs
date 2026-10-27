@@ -13,9 +13,15 @@ use async_trait::async_trait;
 use rc_core::admin::{
     KmsDiagnosticStore, KmsRoundTripErrorClass, KmsRoundTripPhase, run_kms_round_trip,
 };
+use rc_core::ports::{FixedClock, SeededEntropy};
 use rc_core::{Error, RemotePath, Result};
 use std::sync::Mutex;
 use zeroize::Zeroizing;
+
+/// Deterministic ports shared by every diagnostic run in this test file.
+fn fixed_clock() -> FixedClock {
+    FixedClock::from_unix_seconds(1_700_000_000).expect("fixed clock")
+}
 
 #[derive(Clone, Copy)]
 enum Scenario {
@@ -105,9 +111,15 @@ impl KmsDiagnosticStore for FakeDiagnosticStore {
 #[tokio::test]
 async fn roundtrip_success_reports_only_safe_metadata_and_cleans_up() {
     let store = FakeDiagnosticStore::new(Scenario::Success);
-    let report = run_kms_round_trip(&store, "diagnostic-bucket", "key-1")
-        .await
-        .expect("round-trip should pass");
+    let report = run_kms_round_trip(
+        &store,
+        &fixed_clock(),
+        &SeededEntropy::new(7),
+        "diagnostic-bucket",
+        "key-1",
+    )
+    .await
+    .expect("round-trip should pass");
 
     assert!(report.passed);
     assert!(report.cleanup_passed);
@@ -123,9 +135,15 @@ async fn roundtrip_success_reports_only_safe_metadata_and_cleans_up() {
 #[tokio::test]
 async fn roundtrip_write_failure_still_attempts_cleanup() {
     let store = FakeDiagnosticStore::new(Scenario::WriteFailure);
-    let error = run_kms_round_trip(&store, "diagnostic-bucket", "key-1")
-        .await
-        .expect_err("write should fail");
+    let error = run_kms_round_trip(
+        &store,
+        &fixed_clock(),
+        &SeededEntropy::new(7),
+        "diagnostic-bucket",
+        "key-1",
+    )
+    .await
+    .expect_err("write should fail");
 
     assert_eq!(error.phase, KmsRoundTripPhase::Write);
     assert_eq!(error.class, KmsRoundTripErrorClass::Network);
@@ -137,9 +155,15 @@ async fn roundtrip_write_failure_still_attempts_cleanup() {
 #[tokio::test]
 async fn roundtrip_read_failure_still_attempts_cleanup() {
     let store = FakeDiagnosticStore::new(Scenario::ReadFailure);
-    let error = run_kms_round_trip(&store, "diagnostic-bucket", "key-1")
-        .await
-        .expect_err("read should fail");
+    let error = run_kms_round_trip(
+        &store,
+        &fixed_clock(),
+        &SeededEntropy::new(7),
+        "diagnostic-bucket",
+        "key-1",
+    )
+    .await
+    .expect_err("read should fail");
 
     assert_eq!(error.phase, KmsRoundTripPhase::Read);
     assert_eq!(error.class, KmsRoundTripErrorClass::Network);
@@ -151,9 +175,15 @@ async fn roundtrip_read_failure_still_attempts_cleanup() {
 #[tokio::test]
 async fn roundtrip_mismatch_is_distinct_and_cleans_up() {
     let store = FakeDiagnosticStore::new(Scenario::Mismatch);
-    let error = run_kms_round_trip(&store, "diagnostic-bucket", "key-1")
-        .await
-        .expect_err("mismatch should fail");
+    let error = run_kms_round_trip(
+        &store,
+        &fixed_clock(),
+        &SeededEntropy::new(7),
+        "diagnostic-bucket",
+        "key-1",
+    )
+    .await
+    .expect_err("mismatch should fail");
 
     assert_eq!(error.phase, KmsRoundTripPhase::Verify);
     assert_eq!(error.class, KmsRoundTripErrorClass::General);
@@ -164,9 +194,15 @@ async fn roundtrip_mismatch_is_distinct_and_cleans_up() {
 #[tokio::test]
 async fn roundtrip_permission_denial_is_preserved_without_details() {
     let store = FakeDiagnosticStore::new(Scenario::PermissionDenied);
-    let error = run_kms_round_trip(&store, "diagnostic-bucket", "key-1")
-        .await
-        .expect_err("permission denial should fail");
+    let error = run_kms_round_trip(
+        &store,
+        &fixed_clock(),
+        &SeededEntropy::new(7),
+        "diagnostic-bucket",
+        "key-1",
+    )
+    .await
+    .expect_err("permission denial should fail");
 
     assert_eq!(error.phase, KmsRoundTripPhase::Write);
     assert_eq!(error.class, KmsRoundTripErrorClass::Auth);
@@ -177,13 +213,55 @@ async fn roundtrip_permission_denial_is_preserved_without_details() {
 #[tokio::test]
 async fn roundtrip_cleanup_failure_is_reported_separately() {
     let store = FakeDiagnosticStore::new(Scenario::CleanupFailure);
-    let error = run_kms_round_trip(&store, "diagnostic-bucket", "key-1")
-        .await
-        .expect_err("cleanup should fail");
+    let error = run_kms_round_trip(
+        &store,
+        &fixed_clock(),
+        &SeededEntropy::new(7),
+        "diagnostic-bucket",
+        "key-1",
+    )
+    .await
+    .expect_err("cleanup should fail");
 
     assert_eq!(error.phase, KmsRoundTripPhase::Cleanup);
     assert_eq!(error.class, KmsRoundTripErrorClass::Network);
     assert!(error.cleanup_failed);
     assert_eq!(store.cleanup_attempts(), 1);
     assert!(!error.to_string().contains("cleanup detail"));
+}
+
+#[tokio::test]
+async fn roundtrip_is_byte_stable_with_fixed_clock_and_seed() {
+    let first = FakeDiagnosticStore::new(Scenario::Success);
+    let second = FakeDiagnosticStore::new(Scenario::Success);
+
+    let first_report = run_kms_round_trip(
+        &first,
+        &fixed_clock(),
+        &SeededEntropy::new(7),
+        "diagnostic-bucket",
+        "key-1",
+    )
+    .await
+    .expect("first round-trip");
+    let second_report = run_kms_round_trip(
+        &second,
+        &fixed_clock(),
+        &SeededEntropy::new(7),
+        "diagnostic-bucket",
+        "key-1",
+    )
+    .await
+    .expect("second round-trip");
+
+    assert_eq!(first_report, second_report);
+    assert_eq!(first_report.timings.total_ms, 0);
+    assert_eq!(
+        *first.object_key.lock().expect("object key lock"),
+        *second.object_key.lock().expect("object key lock")
+    );
+    assert_eq!(
+        serde_json::to_string(&first_report).expect("serialize first"),
+        serde_json::to_string(&second_report).expect("serialize second")
+    );
 }

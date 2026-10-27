@@ -1,7 +1,7 @@
 //! RustFS operational endpoints and portable S3 usage scanning.
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use jiff::Timestamp;
@@ -40,7 +40,7 @@ impl HealthApi for AdminClient {
 
         let path = probe.path();
         let url = format!("{}{path}", self.endpoint());
-        let started = Instant::now();
+        let started = self.clock().now_monotonic();
         let response = self
             .http_client()
             .get(&url)

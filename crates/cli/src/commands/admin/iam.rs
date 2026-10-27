@@ -17,6 +17,7 @@ use zeroize::Zeroizing;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
+use super::archive_timestamp::canonical_zip_datetime;
 use super::get_admin_client;
 use crate::exit_code::ExitCode;
 use crate::output::Formatter;
@@ -581,7 +582,8 @@ fn write_canonical_zip(documents: &BTreeMap<String, Value>) -> Result<Vec<u8>> {
     let mut writer = ZipWriter::new(cursor);
     let options = SimpleFileOptions::default()
         .compression_method(CompressionMethod::Deflated)
-        .unix_permissions(0o600);
+        .unix_permissions(0o600)
+        .last_modified_time(canonical_zip_datetime()?);
     let entries = documents.keys().map(String::as_str).collect::<Vec<_>>();
     let manifest = serde_json::to_vec(&ArchiveManifest {
         format: ARCHIVE_FORMAT,

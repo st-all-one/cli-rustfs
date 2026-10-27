@@ -5,6 +5,7 @@
 
 mod access_key;
 mod account;
+mod archive_timestamp;
 mod bucket;
 mod bucket_metadata;
 mod capabilities;

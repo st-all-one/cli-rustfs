@@ -2,9 +2,10 @@
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use zeroize::{Zeroize, Zeroizing};
 
+use crate::ports::{Clock, Entropy};
 use crate::{Error, RemotePath, Result};
 
 /// Fixed upper bound for internally generated diagnostic plaintext.
@@ -121,24 +122,33 @@ impl std::fmt::Display for KmsRoundTripError {
 impl std::error::Error for KmsRoundTripError {}
 
 /// Run one bounded SSE-KMS write/read/verify/delete diagnostic.
+///
+/// Time and entropy are injected so deterministic runs can freeze both the
+/// reported timings and the temporary object identifier.
 pub async fn run_kms_round_trip(
     store: &dyn KmsDiagnosticStore,
+    clock: &dyn Clock,
+    entropy: &dyn Entropy,
     bucket: &str,
     key_id: &str,
 ) -> std::result::Result<KmsRoundTripReport, KmsRoundTripError> {
     let mut content = Zeroizing::new(vec![0_u8; KMS_DIAGNOSTIC_CONTENT_BYTES]);
-    getrandom::fill(content.as_mut_slice()).map_err(|_| KmsRoundTripError {
-        phase: KmsRoundTripPhase::Write,
-        class: KmsRoundTripErrorClass::General,
-        cleanup_failed: false,
-    })?;
+    entropy
+        .fill_bytes(content.as_mut_slice())
+        .map_err(|_| KmsRoundTripError {
+            phase: KmsRoundTripPhase::Write,
+            class: KmsRoundTripErrorClass::General,
+            cleanup_failed: false,
+        })?;
 
     let mut object_id = [0_u8; 16];
-    getrandom::fill(&mut object_id).map_err(|_| KmsRoundTripError {
-        phase: KmsRoundTripPhase::Write,
-        class: KmsRoundTripErrorClass::General,
-        cleanup_failed: false,
-    })?;
+    entropy
+        .fill_bytes(&mut object_id)
+        .map_err(|_| KmsRoundTripError {
+            phase: KmsRoundTripPhase::Write,
+            class: KmsRoundTripErrorClass::General,
+            cleanup_failed: false,
+        })?;
     let path = RemotePath::new(
         "",
         bucket,
@@ -148,14 +158,14 @@ pub async fn run_kms_round_trip(
         ),
     );
 
-    let total_started = Instant::now();
-    let write_started = Instant::now();
+    let total_started = clock.now_monotonic();
+    let write_started = clock.now_monotonic();
     let write_result = store
         .put_kms_diagnostic_object(&path, Zeroizing::new(content.to_vec()), key_id)
         .await;
     let write_ms = duration_ms(write_started.elapsed());
 
-    let read_started = Instant::now();
+    let read_started = clock.now_monotonic();
     let primary_failure = match write_result {
         Err(error) => Some((KmsRoundTripPhase::Write, classify_and_discard_error(error))),
         Ok(()) => match store
@@ -171,7 +181,7 @@ pub async fn run_kms_round_trip(
     };
     let read_ms = duration_ms(read_started.elapsed());
 
-    let cleanup_started = Instant::now();
+    let cleanup_started = clock.now_monotonic();
     let cleanup_failure = store
         .delete_kms_diagnostic_object(&path)
         .await

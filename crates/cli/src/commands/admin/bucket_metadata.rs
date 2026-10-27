@@ -14,8 +14,9 @@ use std::io::{Cursor, Read, Write, stdin};
 use std::path::{Path, PathBuf};
 use zeroize::Zeroizing;
 use zip::write::SimpleFileOptions;
-use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter};
+use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
+use super::archive_timestamp::canonical_zip_datetime;
 use super::get_admin_client;
 use crate::exit_code::ExitCode;
 use crate::output::Formatter;
@@ -437,7 +438,7 @@ impl ValidatedArchive {
         let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default()
             .compression_method(CompressionMethod::Deflated)
-            .last_modified_time(DateTime::default())
+            .last_modified_time(canonical_zip_datetime()?)
             .unix_permissions(0o600);
         for ((bucket, config), entry) in &self.entries {
             writer

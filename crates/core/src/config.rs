@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::alias::Alias;
 use crate::error::{Error, Result};
+use crate::ports::{Env, ProcessEnv};
 
 /// Current configuration schema version
 ///
@@ -102,7 +103,15 @@ impl ConfigManager {
     /// The config directory can be overridden by setting the `RC_CONFIG_DIR`
     /// environment variable. This is useful for testing and containerized deployments.
     pub fn new() -> Result<Self> {
-        let config_dir = if let Ok(dir) = std::env::var("RC_CONFIG_DIR") {
+        Self::with_env(&ProcessEnv)
+    }
+
+    /// Create a ConfigManager whose directory resolution uses an injected environment.
+    ///
+    /// Tests and reproducibility checks pass [`crate::ports::MapEnv`] so config
+    /// lookup never depends on the process environment.
+    pub fn with_env(env: &dyn Env) -> Result<Self> {
+        let config_dir = if let Some(dir) = env.var("RC_CONFIG_DIR") {
             PathBuf::from(dir)
         } else {
             dirs::config_dir()
@@ -210,6 +219,7 @@ impl Default for ConfigManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ports::MapEnv;
     use tempfile::TempDir;
 
     fn temp_config_manager() -> (ConfigManager, TempDir) {
@@ -217,6 +227,19 @@ mod tests {
         let config_path = temp_dir.path().join("config.toml");
         let manager = ConfigManager::with_path(config_path);
         (manager, temp_dir)
+    }
+
+    #[test]
+    fn config_path_uses_injected_environment() {
+        let temp_dir = TempDir::new().unwrap();
+        let env = MapEnv::new([("RC_CONFIG_DIR", temp_dir.path().as_os_str().to_owned())]);
+
+        let manager = ConfigManager::with_env(&env).expect("config manager");
+
+        assert_eq!(
+            manager.config_path(),
+            temp_dir.path().join("config.toml").as_path()
+        );
     }
 
     #[test]
